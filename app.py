@@ -89,6 +89,7 @@ def load_databases():
     
     client_asthma = chromadb.PersistentClient(path="./chroma_db_asthma")
     col_asthma = client_asthma.get_collection(name="nice_asthma_guideline_cosine")
+    
     return {"Hypertension (WHO 2021)": col_hyper, "Diabetes (WHO 2018)": col_diab, "Asthma (NICE 2024)": col_asthma}
 
 embedding_model = load_embedding_model()
@@ -144,10 +145,19 @@ elif st.session_state.page == "Settings":
     st.session_state.top_k = st.slider("Top-K Chunks", 1, 5, st.session_state.top_k)
     st.session_state.threshold = st.slider("Distance Threshold", 0.10, 0.60, st.session_state.threshold, 0.05)
 
+elif st.session_state.page == "History":
+    st.title("🕒 Query History")
+    if not st.session_state.history:
+        st.info("No queries recorded yet.")
+    else:
+        for item in reversed(st.session_state.history): 
+            st.markdown(f"**Question ({item['guideline']}):** {item['question']}")
+            st.write(item['answer'])
+            st.markdown("---")
+
 elif st.session_state.page == "Ask Question":
     st.title("Ask a Clinical Question")
     
-    # 1. اختيار المجال في البداية
     st.markdown("### 1. Select Clinical Domain")
     selected_guideline = st.radio("Choose the guideline context:", list(collections.keys()), horizontal=True)
     active_collection = collections[selected_guideline]
@@ -170,8 +180,7 @@ elif st.session_state.page == "Ask Question":
                     context_blocks = [f"Doc: {m['document_name']}\nSec: {m['section_title']}\nPage: {m['page_numbers']}\nText: {t}" for m, t in zip(res_data["metadatas"][0], res_data["documents"][0])]
                     user_prompt = f"CONTEXT:\n{chr(10).join(context_blocks)}\n\nUSER QUERY: {query}"
                     
-                    mtry:
-                        # تم تصحيح اسم الموديل بإضافة models/
+                    try:
                         model = genai.GenerativeModel(model_name="models/gemini-1.5-flash", system_instruction=RAG_SYSTEM_PROMPT)
                         response = model.generate_content(user_prompt, generation_config=genai.types.GenerationConfig(temperature=0.0))
                         
@@ -191,34 +200,14 @@ elif st.session_state.page == "Ask Question":
                         st.markdown("### Structured Output (JSON)")
                         st.markdown(f'<div class="json-box">{json.dumps(structured_data, indent=2)}</div>', unsafe_allow_html=True)
                         
+                        st.session_state.history.append({"question": query, "answer": structured_data.get('recommendation', ''), "guideline": selected_guideline})
+                        
                     except json.JSONDecodeError:
                         st.error("Failed to parse structured JSON. Raw output:")
                         st.write(response.text)
                     except Exception as e:
-                        final_answer = "⚠️ API Quota Exceeded. Please wait a minute and try again." if "429" in str(e) or "ResourceExhausted" in str(e) else f"Error: {e}"
-                        st.warning(final_answer)
-                    response = model.generate_content(user_prompt, generation_config=genai.types.GenerationConfig(temperature=0.0))
-                    
-                    try:
-                        json_str = extract_json(response.text)
-                        structured_data = json.loads(json_str)
-                        
-                        st.markdown(f"""
-                        <div class="recommendation-box">
-                            <h4 style="color:#c1121f;">Recommendation</h4>
-                            <p>{structured_data.get('recommendation', '')}</p>
-                            <h5 style="color:#669bbc;">Evidence (Excerpt)</h5>
-                            <p><i>"{structured_data.get('evidence', '')}"</i></p>
-                            <p><strong>Confidence:</strong> {structured_data.get('confidence', '')}</p>
-                        </div>
-                        """, unsafe_allow_html=True)
-                        
-                        st.markdown("### Structured Output (JSON)")
-                        st.markdown(f'<div class="json-box">{json.dumps(structured_data, indent=2)}</div>', unsafe_allow_html=True)
-                        
-                    except json.JSONDecodeError:
-                        st.error("Failed to parse structured JSON. Raw output:")
-                        st.write(response.text)
+                        err_msg = "⚠️ API Quota Exceeded. Please wait a minute and try again." if "429" in str(e) or "ResourceExhausted" in str(e) else f"Error: {e}"
+                        st.warning(err_msg)
 
         with col_evidence:
             st.markdown("### Retrieved Evidence (Top Chunks)")

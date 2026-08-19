@@ -69,15 +69,21 @@ st.markdown("""
 # 2. Session State Initialization
 # ==========================================
 if "page" not in st.session_state:
-    st.session_state.page = "Chat"
-if "messages" not in st.session_state:
-    st.session_state.messages = []
+    st.session_state.page = "Ask Question"
+if "history" not in st.session_state:
+    st.session_state.history = []
 if "top_k" not in st.session_state:
     st.session_state.top_k = 3
 if "threshold" not in st.session_state:
     st.session_state.threshold = 0.35
-if "latest_evidence" not in st.session_state:
-    st.session_state.latest_evidence = None
+
+# متغيرات لحفظ السؤال الحالي علشان ميتسمحش لو غيرنا الصفحة
+if "current_q" not in st.session_state:
+    st.session_state.current_q = None
+if "current_a" not in st.session_state:
+    st.session_state.current_a = None
+if "current_evidence" not in st.session_state:
+    st.session_state.current_evidence = None
 
 # ==========================================
 # 3. Sidebar Navigation
@@ -86,8 +92,10 @@ with st.sidebar:
     st.markdown("### 🩺 Medical RAG System")
     st.markdown("---")
     
-    if st.button("💬 Ask Question & History"):
-        st.session_state.page = "Chat"
+    if st.button("💬 Ask Question"):
+        st.session_state.page = "Ask Question"
+    if st.button("🕒 History"):
+        st.session_state.page = "History"
     if st.button("📚 Sources"):
         st.session_state.page = "Sources"
     if st.button("⚙️ Settings"):
@@ -177,43 +185,39 @@ elif st.session_state.page == "Settings":
     )
     st.success("Settings saved automatically!")
 
-elif st.session_state.page == "Chat":
-    st.title("🩺 Medical RAG System — WHO Hypertension")
+elif st.session_state.page == "History":
+    st.title("🕒 Query History")
+    st.markdown("---")
+    if not st.session_state.history:
+        st.info("No questions asked yet. Go to 'Ask Question' to start.")
+    else:
+        for item in reversed(st.session_state.history): # عرض الأحدث أولاً
+            st.markdown(f"""
+            <div class="question-box">
+                <strong>Question:</strong> "{item['question']}"
+            </div>
+            """, unsafe_allow_html=True)
+            st.markdown(item['answer'])
+            st.markdown("---")
+
+elif st.session_state.page == "Ask Question":
+    st.title("🩺 Ask a Clinical Question")
     st.caption("Answering only from: WHO Guideline for the Pharmacological Treatment of Hypertension in Adults (2021)")
 
     col_main, col_evidence = st.columns([6, 4])
 
-    with col_main:
-        # 1. عرض تاريخ المحادثة
-        for msg in st.session_state.messages:
-            if msg["role"] == "user":
-                st.markdown(f"""
-                <div class="question-box">
-                    <strong>Question:</strong> "{msg['content']}"
-                </div>
-                """, unsafe_allow_html=True)
-            else:
-                st.markdown(msg["content"])
-                st.markdown("---")
-
-        # 2. استقبال سؤال جديد
-        query = st.chat_input("What is the recommended blood pressure threshold...?")
+    # استقبال سؤال جديد
+    query = st.chat_input("What is the recommended blood pressure threshold...?")
+    
+    if query:
+        st.session_state.current_q = query
         
-        if query:
-            # إضافة وعرض السؤال الجديد
-            st.session_state.messages.append({"role": "user", "content": query})
-            st.markdown(f"""
-            <div class="question-box">
-                <strong>Question:</strong> "{query}"
-            </div>
-            """, unsafe_allow_html=True)
-            
+        with col_main:
             with st.spinner("Searching guidelines and generating safe response..."):
                 retrieval_result = safe_query(query, top_k=st.session_state.top_k, threshold=st.session_state.threshold)
                 res_data = retrieval_result["retrieved_chunks"]
                 
-                # حفظ الأدلة لعرضها في العمود الجانبي
-                st.session_state.latest_evidence = res_data
+                st.session_state.current_evidence = res_data
                 
                 if not retrieval_result["in_scope"]:
                     final_answer = (
@@ -221,7 +225,6 @@ elif st.session_state.page == "Chat":
                         "**2. Honesty:** I cannot generate clinical advice or provide information beyond the provided text with clinical certainty.\n\n"
                         "**3. Next Step:** Please consult a licensed medical professional or refer to appropriate external guidelines for safe and accurate guidance."
                     )
-                    st.error("Out of Scope / Safe Refusal Triggered")
                 else:
                     context_blocks = []
                     for i in range(len(res_data["ids"][0])):
@@ -238,29 +241,43 @@ elif st.session_state.page == "Chat":
                     model = genai.GenerativeModel(model_name="models/gemini-3.6-flash", system_instruction=RAG_SYSTEM_PROMPT)
                     response = model.generate_content(user_prompt, generation_config=genai.types.GenerationConfig(temperature=0.0))
                     
-                    st.success("High Confidence Answer Generated")
                     final_answer = response.text
                 
-                st.markdown(final_answer)
-                st.markdown("---")
-                st.session_state.messages.append({"role": "assistant", "content": final_answer})
-
-    # 3. عرض الأدلة الجانبية لآخر سؤال فقط
-    with col_evidence:
-        st.markdown("### Retrieved Evidence (Latest Query)")
-        if st.session_state.latest_evidence and "ids" in st.session_state.latest_evidence and len(st.session_state.latest_evidence["ids"][0]) > 0:
-            res_data = st.session_state.latest_evidence
-            for i in range(len(res_data["ids"][0])):
-                doc_text = res_data["documents"][0][i]
-                meta = res_data["metadatas"][0][i]
-                dist = res_data["distances"][0][i]
-                sim_score = round(1 - dist, 2)
+                st.session_state.current_a = final_answer
                 
-                st.markdown(f"""
-                <div class="evidence-box">
-                    <span class="score-badge">{sim_score}</span> <strong>{meta['section_title']} (p.{meta['page_numbers']})</strong><br><br>
-                    {doc_text[:250]}...
-                </div>
-                """, unsafe_allow_html=True)
-        else:
-            st.info("No relevant chunks retrieved or waiting for a query.")
+                # حفظ في السجل (History)
+                st.session_state.history.append({
+                    "question": query,
+                    "answer": final_answer
+                })
+
+    # عرض السؤال الحالي وإجابته (إذا كان موجوداً)
+    if st.session_state.current_q:
+        with col_main:
+            st.markdown(f"""
+            <div class="question-box">
+                <strong>Question:</strong> "{st.session_state.current_q}"
+            </div>
+            """, unsafe_allow_html=True)
+            
+            st.markdown(st.session_state.current_a)
+
+        # عرض الأدلة الخاصة بالسؤال الحالي في العمود الجانبي
+        with col_evidence:
+            st.markdown("### Retrieved Evidence")
+            res_data = st.session_state.current_evidence
+            if res_data and "ids" in res_data and len(res_data["ids"][0]) > 0:
+                for i in range(len(res_data["ids"][0])):
+                    doc_text = res_data["documents"][0][i]
+                    meta = res_data["metadatas"][0][i]
+                    dist = res_data["distances"][0][i]
+                    sim_score = round(1 - dist, 2)
+                    
+                    st.markdown(f"""
+                    <div class="evidence-box">
+                        <span class="score-badge">{sim_score}</span> <strong>{meta['section_title']} (p.{meta['page_numbers']})</strong><br><br>
+                        {doc_text[:250]}...
+                    </div>
+                    """, unsafe_allow_html=True)
+            else:
+                st.info("No relevant chunks retrieved.")

@@ -104,7 +104,7 @@ def generate_grounded_answer(query):
     
     # توليد الإجابة باستخدام Gemini
     model = genai.GenerativeModel(
-        model_name="gemini-1.5-flash", 
+        model_name="models/gemini-3.6-flash",
         system_instruction=RAG_SYSTEM_PROMPT
     )
     response = model.generate_content(

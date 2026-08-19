@@ -5,18 +5,16 @@ import google.generativeai as genai
 import numpy as np
 
 # ==========================================
-# 1. Page Configuration & Custom CSS (UI/UX)
+# 1. Page Configuration & Custom CSS
 # ==========================================
 st.set_page_config(page_title="Medical RAG - WHO Hypertension", layout="wide", initial_sidebar_state="expanded")
 
-# تطبيق الألوان (Earthy Muted Palette)
 st.markdown("""
 <style>
     /* Charcoal Blue Sidebar */
     [data-testid="stSidebar"] {
         background-color: #2f3e46 !important;
     }
-    /* Ash Grey Sidebar Text */
     [data-testid="stSidebar"] * {
         color: #cad2c5 !important;
     }
@@ -27,13 +25,14 @@ st.markdown("""
         background-color: #354f52 !important;
         color: #cad2c5 !important;
         border: none;
+        width: 100%;
+        margin-bottom: 5px;
     }
-    /* Deep Teal Hover Effect */
     .stButton>button:hover {
         background-color: #52796f !important;
         color: white !important;
     }
-    /* Ash Grey Evidence Box with Deep Teal Border */
+    /* Evidence Box */
     .evidence-box {
         background-color: #cad2c5;
         color: #2f3e46;
@@ -43,7 +42,7 @@ st.markdown("""
         margin-bottom: 15px;
         font-size: 0.9em;
     }
-    /* Muted Teal Score Badge */
+    /* Score Badge */
     .score-badge {
         background-color: #84a98c;
         color: #2f3e46;
@@ -52,25 +51,50 @@ st.markdown("""
         font-size: 0.8em;
         font-weight: bold;
     }
+    /* Custom Question Box */
+    .question-box {
+        background-color: #f1f3f4;
+        color: #2f3e46;
+        padding: 15px;
+        border-radius: 10px;
+        border: 1px solid #84a98c;
+        margin-bottom: 20px;
+        font-weight: 500;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
 </style>
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 2. Sidebar Navigation
+# 2. Session State Initialization
+# ==========================================
+if "page" not in st.session_state:
+    st.session_state.page = "Chat"
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+if "top_k" not in st.session_state:
+    st.session_state.top_k = 3
+if "threshold" not in st.session_state:
+    st.session_state.threshold = 0.35
+if "latest_evidence" not in st.session_state:
+    st.session_state.latest_evidence = None
+
+# ==========================================
+# 3. Sidebar Navigation
 # ==========================================
 with st.sidebar:
     st.markdown("### 🩺 Medical RAG System")
     st.markdown("---")
-    st.button("💬 Ask Question", use_container_width=True)
-    st.button("🕒 History", use_container_width=True)
-    st.button("📚 Sources", use_container_width=True)
-    st.button("ℹ️ About", use_container_width=True)
-    st.markdown("---")
-    st.button("⚙️ Settings", use_container_width=True)
-    st.button("🚪 Logout", use_container_width=True)
+    
+    if st.button("💬 Ask Question & History"):
+        st.session_state.page = "Chat"
+    if st.button("📚 Sources"):
+        st.session_state.page = "Sources"
+    if st.button("⚙️ Settings"):
+        st.session_state.page = "Settings"
 
 # ==========================================
-# 3. Model & DB Initialization
+# 4. Model & DB Initialization
 # ==========================================
 try:
     gemini_api_key = st.secrets["GEMINI_API_KEY"]
@@ -85,7 +109,6 @@ def load_embedding_model():
 
 @st.cache_resource
 def load_chroma_collection():
-    # تم تعديل المسار لـ "." ليقرأ الملفات من الصفحة الرئيسية لـ GitHub
     client = chromadb.PersistentClient(path=".")
     return client.get_collection(name="who_hypertension_guideline_v2_cosine")
 
@@ -99,16 +122,15 @@ def normalize_embedding(emb):
         return (vec / norm).tolist()
     return vec.tolist()
 
-def safe_query(question, top_k=3):
+def safe_query(question, top_k, threshold):
     raw_emb = embedding_model.encode([question])[0]
     query_embedding = normalize_embedding(raw_emb)
     results = collection.query(query_embeddings=[query_embedding], n_results=top_k)
     
     best_distance = results["distances"][0][0] if results["distances"][0] else 1.0
     
-    if best_distance > 0.35: 
+    if best_distance > threshold: 
         return {"in_scope": False, "retrieved_chunks": results}
-        
     return {"in_scope": True, "retrieved_chunks": results}
 
 RAG_SYSTEM_PROMPT = """
@@ -127,55 +149,107 @@ RULES:
 """
 
 # ==========================================
-# 4. Main Layout
+# 5. Page Routing
 # ==========================================
-st.title("🩺 Medical RAG System — WHO Hypertension")
-st.caption("Answering only from: WHO Guideline for the Pharmacological Treatment of Hypertension in Adults (2021)")
 
-# تقسيم الشاشة لعمودين (السؤال/الإجابة 60% - الأدلة 40%)
-col_main, col_evidence = st.columns([6, 4])
+if st.session_state.page == "Sources":
+    st.title("📚 Official Guideline Sources")
+    st.markdown("---")
+    st.markdown("### 1. WHO Guideline for the Pharmacological Treatment of Hypertension in Adults (2021)")
+    st.write("**Published By:** World Health Organization")
+    st.write("**Document Type:** Clinical Public Health Guidance")
+    st.write("**Scope:** Pharmacological treatment of hypertension in non-pregnant adults.")
+    st.info("All answers generated by this AI system are exclusively grounded in the text of this specific, legally usable PDF document. No parametric memory or external web search is utilized.")
 
-query = st.chat_input("What is the recommended blood pressure threshold...?")
+elif st.session_state.page == "Settings":
+    st.title("⚙️ System Guardrails & Parameters")
+    st.markdown("---")
+    st.write("Adjust the RAG pipeline parameters to control retrieval and safety thresholds.")
+    
+    st.session_state.top_k = st.slider(
+        "Top-K Chunks (Number of text chunks retrieved)", 
+        min_value=1, max_value=5, value=st.session_state.top_k, step=1
+    )
+    
+    st.session_state.threshold = st.slider(
+        "Cosine Distance Threshold (Lower means stricter safety refusal)", 
+        min_value=0.10, max_value=0.60, value=st.session_state.threshold, step=0.05
+    )
+    st.success("Settings saved automatically!")
 
-if query:
+elif st.session_state.page == "Chat":
+    st.title("🩺 Medical RAG System — WHO Hypertension")
+    st.caption("Answering only from: WHO Guideline for the Pharmacological Treatment of Hypertension in Adults (2021)")
+
+    col_main, col_evidence = st.columns([6, 4])
+
     with col_main:
-        st.markdown(f"**Question:** {query}")
-        
-        with st.spinner("Searching guidelines and generating safe response..."):
-            retrieval_result = safe_query(query, top_k=3)
-            res_data = retrieval_result["retrieved_chunks"]
-            
-            if not retrieval_result["in_scope"]:
-                final_answer = (
-                    "**1. Insufficiency:** The provided WHO hypertension guideline does not contain data or recommendations to address your specific question.\n\n"
-                    "**2. Honesty:** I cannot generate clinical advice or provide information beyond the provided text with clinical certainty.\n\n"
-                    "**3. Next Step:** Please consult a licensed medical professional or refer to appropriate external guidelines for safe and accurate guidance."
-                )
-                st.error("Out of Scope / Safe Refusal Triggered")
-                st.markdown(final_answer)
+        # 1. عرض تاريخ المحادثة
+        for msg in st.session_state.messages:
+            if msg["role"] == "user":
+                st.markdown(f"""
+                <div class="question-box">
+                    <strong>Question:</strong> "{msg['content']}"
+                </div>
+                """, unsafe_allow_html=True)
             else:
-                context_blocks = []
-                for i in range(len(res_data["ids"][0])):
-                    chunk_id = res_data["ids"][0][i]
-                    text = res_data["documents"][0][i]
-                    meta = res_data["metadatas"][0][i]
-                    context_blocks.append(
-                        f"Document: {meta['document_name']}\nSection: {meta['section_title']}\nPage: {meta['page_numbers']}\nChunk: {chunk_id}\nText: {text}\n"
-                    )
-                
-                full_context = "\n\n".join(context_blocks)
-                user_prompt = f"CONTEXT:\n{full_context}\n\nUSER QUERY: {query}"
-                
-                model = genai.GenerativeModel(model_name="models/gemini-3.6-flash", system_instruction=RAG_SYSTEM_PROMPT)
-                response = model.generate_content(user_prompt, generation_config=genai.types.GenerationConfig(temperature=0.0))
-                
-                st.success("High Confidence Answer Generated")
-                st.markdown(response.text)
+                st.markdown(msg["content"])
+                st.markdown("---")
 
-    # عرض الأدلة في العمود الجانبي بألوان تناسب الـ Palette
+        # 2. استقبال سؤال جديد
+        query = st.chat_input("What is the recommended blood pressure threshold...?")
+        
+        if query:
+            # إضافة وعرض السؤال الجديد
+            st.session_state.messages.append({"role": "user", "content": query})
+            st.markdown(f"""
+            <div class="question-box">
+                <strong>Question:</strong> "{query}"
+            </div>
+            """, unsafe_allow_html=True)
+            
+            with st.spinner("Searching guidelines and generating safe response..."):
+                retrieval_result = safe_query(query, top_k=st.session_state.top_k, threshold=st.session_state.threshold)
+                res_data = retrieval_result["retrieved_chunks"]
+                
+                # حفظ الأدلة لعرضها في العمود الجانبي
+                st.session_state.latest_evidence = res_data
+                
+                if not retrieval_result["in_scope"]:
+                    final_answer = (
+                        "**1. Insufficiency:** The provided WHO hypertension guideline does not contain data or recommendations to address your specific question.\n\n"
+                        "**2. Honesty:** I cannot generate clinical advice or provide information beyond the provided text with clinical certainty.\n\n"
+                        "**3. Next Step:** Please consult a licensed medical professional or refer to appropriate external guidelines for safe and accurate guidance."
+                    )
+                    st.error("Out of Scope / Safe Refusal Triggered")
+                else:
+                    context_blocks = []
+                    for i in range(len(res_data["ids"][0])):
+                        chunk_id = res_data["ids"][0][i]
+                        text = res_data["documents"][0][i]
+                        meta = res_data["metadatas"][0][i]
+                        context_blocks.append(
+                            f"Document: {meta['document_name']}\nSection: {meta['section_title']}\nPage: {meta['page_numbers']}\nChunk: {chunk_id}\nText: {text}\n"
+                        )
+                    
+                    full_context = "\n\n".join(context_blocks)
+                    user_prompt = f"CONTEXT:\n{full_context}\n\nUSER QUERY: {query}"
+                    
+                    model = genai.GenerativeModel(model_name="models/gemini-3.6-flash", system_instruction=RAG_SYSTEM_PROMPT)
+                    response = model.generate_content(user_prompt, generation_config=genai.types.GenerationConfig(temperature=0.0))
+                    
+                    st.success("High Confidence Answer Generated")
+                    final_answer = response.text
+                
+                st.markdown(final_answer)
+                st.markdown("---")
+                st.session_state.messages.append({"role": "assistant", "content": final_answer})
+
+    # 3. عرض الأدلة الجانبية لآخر سؤال فقط
     with col_evidence:
-        st.markdown("### Retrieved Evidence (Top-3 Chunks)")
-        if "ids" in res_data and len(res_data["ids"]) > 0:
+        st.markdown("### Retrieved Evidence (Latest Query)")
+        if st.session_state.latest_evidence and "ids" in st.session_state.latest_evidence and len(st.session_state.latest_evidence["ids"][0]) > 0:
+            res_data = st.session_state.latest_evidence
             for i in range(len(res_data["ids"][0])):
                 doc_text = res_data["documents"][0][i]
                 meta = res_data["metadatas"][0][i]
@@ -189,4 +263,4 @@ if query:
                 </div>
                 """, unsafe_allow_html=True)
         else:
-            st.info("No relevant chunks retrieved.")
+            st.info("No relevant chunks retrieved or waiting for a query.")

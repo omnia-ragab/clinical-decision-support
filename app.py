@@ -24,7 +24,7 @@ def load_embedding_model():
 @st.cache_resource
 def load_chroma_collection():
     # لازم فولدر chroma_db يكون موجود مع ملفات المشروع
-    client = chromadb.PersistentClient(path="./chroma_db")
+    client = chromadb.PersistentClient(path=".")
     # تأكدي إن ده اسم الكولكشن النهائي بتاعك
     return client.get_collection(name="who_hypertension_guideline_v2_cosine")
 

@@ -3,101 +3,67 @@ import chromadb
 from sentence_transformers import SentenceTransformer
 import google.generativeai as genai
 import numpy as np
+import json
+import re
 
 # ==========================================
-# 1. Page Configuration & Custom CSS (UI/UX)
+# 1. Page Configuration & Custom CSS
 # ==========================================
-st.set_page_config(page_title="Medical RAG - WHO Hypertension", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="Clinical Decision Support ᴸᴵᵀᴱ", layout="wide", initial_sidebar_state="expanded")
 
-# تطبيق الألوان (Earthy Muted Palette) مع بوكس السؤال
 st.markdown("""
 <style>
-    /* Charcoal Blue Sidebar */
-    [data-testid="stSidebar"] {
-        background-color: #2f3e46 !important;
-    }
-    /* Ash Grey Sidebar Text */
-    [data-testid="stSidebar"] * {
-        color: #cad2c5 !important;
-    }
-    /* Dark Slate Grey Buttons */
+    /* Deep Space Blue Sidebar */
+    [data-testid="stSidebar"] { background-color: #003049 !important; }
+    [data-testid="stSidebar"] * { color: #fdf0d5 !important; }
+    
+    /* Buttons */
     .stButton>button {
-        border-radius: 8px;
-        text-align: left;
-        background-color: #354f52 !important;
-        color: #cad2c5 !important;
-        border: none;
-        width: 100%;
-        margin-bottom: 5px;
+        border-radius: 8px; text-align: left; background-color: #669bbc !important;
+        color: #fdf0d5 !important; border: none; width: 100%; margin-bottom: 5px;
     }
-    /* Deep Teal Hover Effect */
-    .stButton>button:hover {
-        background-color: #52796f !important;
-        color: white !important;
+    .stButton>button:hover { background-color: #c1121f !important; color: white !important; }
+    
+    /* Main Output Cards */
+    .recommendation-box {
+        background-color: #ffffff; padding: 20px; border-radius: 8px;
+        border-top: 4px solid #003049; margin-bottom: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     }
-    /* Ash Grey Evidence Box with Deep Teal Border */
     .evidence-box {
-        background-color: #cad2c5;
-        color: #2f3e46;
-        padding: 15px;
-        border-radius: 8px;
-        border-left: 6px solid #52796f;
-        margin-bottom: 15px;
-        font-size: 0.9em;
+        background-color: #fdf0d5; color: #003049; padding: 15px; border-radius: 8px;
+        border-left: 6px solid #669bbc; margin-bottom: 15px; font-size: 0.9em;
     }
-    /* Muted Teal Score Badge */
     .score-badge {
-        background-color: #84a98c;
-        color: #2f3e46;
-        padding: 3px 8px;
-        border-radius: 12px;
-        font-size: 0.8em;
-        font-weight: bold;
+        background-color: #669bbc; color: #fdf0d5; padding: 3px 8px; border-radius: 12px;
+        font-size: 0.8em; font-weight: bold;
     }
-    /* Custom Question Box */
-    .question-box {
-        background-color: #f1f3f4;
-        color: #2f3e46;
-        padding: 15px;
-        border-radius: 10px;
-        border: 1px solid #84a98c;
-        margin-bottom: 20px;
-        font-weight: 500;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    .json-box {
+        background-color: #003049; color: #669bbc; padding: 15px; border-radius: 8px;
+        font-family: monospace; font-size: 0.85em; overflow-x: auto;
     }
+    /* Headers */
+    h1, h2, h3 { color: #003049 !important; }
 </style>
 """, unsafe_allow_html=True)
 
 # ==========================================
 # 2. Session State Initialization
 # ==========================================
-if "page" not in st.session_state:
-    st.session_state.page = "Ask Question"
-if "history" not in st.session_state:
-    st.session_state.history = []
-
-# متغيرات لحفظ حالة السؤال الحالي والأدلة
-if "current_q" not in st.session_state:
-    st.session_state.current_q = None
-if "current_a" not in st.session_state:
-    st.session_state.current_a = None
-if "current_evidence" not in st.session_state:
-    st.session_state.current_evidence = None
+if "page" not in st.session_state: st.session_state.page = "Ask Question"
+if "history" not in st.session_state: st.session_state.history = []
+if "top_k" not in st.session_state: st.session_state.top_k = 3
+if "threshold" not in st.session_state: st.session_state.threshold = 0.35
 
 # ==========================================
 # 3. Sidebar Navigation
 # ==========================================
 with st.sidebar:
-    st.markdown("### 🩺 Medical RAG System")
+    st.markdown("### 🛡️ Clinical Decision Support ᴸᴵᵀᴱ")
     st.markdown("---")
-    if st.button("💬 Ask Question"):
-        st.session_state.page = "Ask Question"
-    if st.button("🕒 History"):
-        st.session_state.page = "History"
-    if st.button("📚 Sources"):
-        st.session_state.page = "Sources"
-    if st.button("⚙️ Settings"):
-        st.session_state.page = "Settings"
+    if st.button("💬 Ask Question"): st.session_state.page = "Ask Question"
+    if st.button("🕒 History"): st.session_state.page = "History"
+    if st.button("📚 Sources"): st.session_state.page = "Sources"
+    if st.button("⚙️ Settings"): st.session_state.page = "Settings"
 
 # ==========================================
 # 4. Model & DB Initialization
@@ -114,168 +80,130 @@ def load_embedding_model():
     return SentenceTransformer("all-MiniLM-L6-v2")
 
 @st.cache_resource
-def load_chroma_collection():
-    client = chromadb.PersistentClient(path=".")
-    return client.get_collection(name="who_hypertension_guideline_v2_cosine")
+def load_databases():
+    client_hyper = chromadb.PersistentClient(path="./chroma_db_hypertension")
+    col_hyper = client_hyper.get_collection(name="who_hypertension_guideline_v2_cosine")
+    
+    client_diab = chromadb.PersistentClient(path="./chroma_db_diabetes")
+    col_diab = client_diab.get_collection(name="who_diabetes_guideline_cosine")
+    
+    client_asthma = chromadb.PersistentClient(path="./chroma_db_asthma")
+    col_asthma = client_asthma.get_collection(name="nice_asthma_guideline_cosine")
+    return {"Hypertension (WHO 2021)": col_hyper, "Diabetes (WHO 2018)": col_diab, "Asthma (NICE 2024)": col_asthma}
 
 embedding_model = load_embedding_model()
-collection = load_chroma_collection()
+collections = load_databases()
 
 def normalize_embedding(emb):
     vec = np.array(emb)
     norm = np.linalg.norm(vec)
-    if norm > 0:
-        return (vec / norm).tolist()
-    return vec.tolist()
+    return (vec / norm).tolist() if norm > 0 else vec.tolist()
 
-def safe_query(question, top_k=3):
+def safe_query(collection, question, top_k=3):
     raw_emb = embedding_model.encode([question])[0]
     query_embedding = normalize_embedding(raw_emb)
     results = collection.query(query_embeddings=[query_embedding], n_results=top_k)
-    
     best_distance = results["distances"][0][0] if results["distances"][0] else 1.0
-    
-    if best_distance > 0.35: 
+    if best_distance > st.session_state.threshold: 
         return {"in_scope": False, "retrieved_chunks": results}
-        
     return {"in_scope": True, "retrieved_chunks": results}
 
 RAG_SYSTEM_PROMPT = """
-You are a clinical decision support AI acting as an evidence synthesizer.
-Your ONLY source of truth is the provided clinical guidelines context.
-
-CORE PHILOSOPHY: Fluent -> Safe.
-
-RULES:
-1. If the context contains the answer, summarize it concisely under "Recommendation", followed by "Supporting Evidence" with bullet points.
-2. CITATIONS ARE MANDATORY: Every claim must end with a citation strictly in this format: [Document Name - Section: <Section Name> - Page <Page Number> - Chunk <Chunk ID>].
-3. If the user asks for personal medical advice, opinions outside the context, or out-of-scope questions, you MUST refuse using EXACTLY this 3-part structure:
-   "1. Insufficiency: The provided WHO hypertension guideline does not contain data or recommendations to address your specific question.
-    2. Honesty: I cannot generate clinical advice or provide information beyond the provided text with clinical certainty.
-    3. Next Step: Please consult a licensed medical professional or refer to appropriate external guidelines for safe and accurate guidance."
+You are a clinical decision support AI. Your ONLY source of truth is the provided clinical guidelines context.
+Output your response STRICTLY as a valid JSON object with the following structure:
+{
+  "recommendation": "Concise recommendation based on context.",
+  "evidence": "Supporting evidence excerpt from context.",
+  "citations": [
+    {"document": "Doc Name", "section": "Section Name", "page": "Page Num"}
+  ],
+  "confidence": "High/Medium/Low"
+}
+If out-of-scope or no context applies, output:
+{
+  "recommendation": "Out of Scope",
+  "evidence": "Insufficient information in the provided guidelines.",
+  "citations": [],
+  "confidence": "Low"
+}
 """
 
-# ==========================================
-# 5. Page Routing & Layout
-# ==========================================
+def extract_json(text):
+    match = re.search(r'\{.*\}', text, re.DOTALL)
+    return match.group(0) if match else "{}"
 
+# ==========================================
+# 5. Page Routing
+# ==========================================
 if st.session_state.page == "Sources":
     st.title("📚 Official Guideline Sources")
-    st.markdown("---")
-    st.markdown("### 1. WHO Guideline for the Pharmacological Treatment of Hypertension in Adults (2021)")
-    st.write("**Published By:** World Health Organization")
-    st.write("**Document Type:** Clinical Public Health Guidance")
-    st.info("All answers generated by this AI system are exclusively grounded in the text of this specific, legally usable PDF document. No parametric memory or external web search is utilized.")
+    st.write("- **Hypertension (WHO 2021)**\n- **Diabetes (WHO 2018)**\n- **Asthma (NICE 2024)**")
 
 elif st.session_state.page == "Settings":
     st.title("⚙️ System Guardrails")
-    st.markdown("---")
-    st.info("Settings are locked for the live demo to ensure strict evidence grounding.")
-    st.write("- **Retrieval Top-K:** 3 Chunks")
-    st.write("- **Distance Threshold:** 0.35 (Cosine)")
-
-elif st.session_state.page == "History":
-    st.title("🕒 Query History")
-    st.markdown("---")
-    if not st.session_state.history:
-        st.info("No questions asked yet. Go to 'Ask Question' to start.")
-    else:
-        # عرض الأسئلة الأحدث أولاً
-        for item in reversed(st.session_state.history): 
-            st.markdown(f"""
-            <div class="question-box">
-                <strong>Question:</strong> "{item['question']}"
-            </div>
-            """, unsafe_allow_html=True)
-            st.markdown(item['answer'])
-            st.markdown("---")
+    st.session_state.top_k = st.slider("Top-K Chunks", 1, 5, st.session_state.top_k)
+    st.session_state.threshold = st.slider("Distance Threshold", 0.10, 0.60, st.session_state.threshold, 0.05)
 
 elif st.session_state.page == "Ask Question":
-    st.title("🩺 Medical RAG System — WHO Hypertension")
-    st.caption("Answering only from: WHO Guideline for the Pharmacological Treatment of Hypertension in Adults (2021)")
-
-    col_main, col_evidence = st.columns([6, 4])
-
-    query = st.chat_input("What is the recommended blood pressure threshold...?")
+    st.title("Ask a Clinical Question")
+    
+    # 1. اختيار المجال في البداية
+    st.markdown("### 1. Select Clinical Domain")
+    selected_guideline = st.radio("Choose the guideline context:", list(collections.keys()), horizontal=True)
+    active_collection = collections[selected_guideline]
+    
+    st.markdown("### 2. Enter your Query")
+    query = st.chat_input(f"Ask about {selected_guideline}...")
 
     if query:
-        st.session_state.current_q = query
+        col_main, col_evidence = st.columns([6, 4])
         
         with col_main:
-            with st.spinner("Searching guidelines and generating safe response..."):
-                retrieval_result = safe_query(query, top_k=3)
+            st.markdown(f"**Question:** {query}")
+            with st.spinner("Analyzing guidelines..."):
+                retrieval_result = safe_query(active_collection, query, top_k=st.session_state.top_k)
                 res_data = retrieval_result["retrieved_chunks"]
                 
-                st.session_state.current_evidence = res_data
-                
                 if not retrieval_result["in_scope"]:
-                    final_answer = (
-                        "**1. Insufficiency:** The provided WHO hypertension guideline does not contain data or recommendations to address your specific question.\n\n"
-                        "**2. Honesty:** I cannot generate clinical advice or provide information beyond the provided text with clinical certainty.\n\n"
-                        "**3. Next Step:** Please consult a licensed medical professional or refer to appropriate external guidelines for safe and accurate guidance."
-                    )
-                    st.error("Out of Scope / Safe Refusal Triggered")
+                    st.error("⚠️ Refusal Triggered: Out-of-Scope Question")
                 else:
-                    context_blocks = []
-                    for i in range(len(res_data["ids"][0])):
-                        chunk_id = res_data["ids"][0][i]
-                        text = res_data["documents"][0][i]
-                        meta = res_data["metadatas"][0][i]
-                        context_blocks.append(
-                            f"Document: {meta['document_name']}\nSection: {meta['section_title']}\nPage: {meta['page_numbers']}\nChunk: {chunk_id}\nText: {text}\n"
-                        )
+                    context_blocks = [f"Doc: {m['document_name']}\nSec: {m['section_title']}\nPage: {m['page_numbers']}\nText: {t}" for m, t in zip(res_data["metadatas"][0], res_data["documents"][0])]
+                    user_prompt = f"CONTEXT:\n{chr(10).join(context_blocks)}\n\nUSER QUERY: {query}"
                     
-                    full_context = "\n\n".join(context_blocks)
-                    user_prompt = f"CONTEXT:\n{full_context}\n\nUSER QUERY: {query}"
+                    model = genai.GenerativeModel("gemini-1.5-flash", system_instruction=RAG_SYSTEM_PROMPT)
+                    response = model.generate_content(user_prompt, generation_config=genai.types.GenerationConfig(temperature=0.0))
                     
-                    # الحماية ضد نفاذ رصيد Gemini
                     try:
-                        model = genai.GenerativeModel(model_name="models/gemini-3.6-flash", system_instruction=RAG_SYSTEM_PROMPT)
-                        response = model.generate_content(user_prompt, generation_config=genai.types.GenerationConfig(temperature=0.0))
+                        json_str = extract_json(response.text)
+                        structured_data = json.loads(json_str)
                         
-                        st.success("High Confidence Answer Generated")
-                        final_answer = response.text
-                    except Exception as e:
-                        if "429" in str(e) or "ResourceExhausted" in str(e):
-                            final_answer = "⚠️ **API Quota Exceeded:** The system is currently receiving too many requests. Please wait a minute and try again."
-                            st.warning(final_answer)
-                        else:
-                            final_answer = f"⚠️ **Error generating response:** {e}"
-                            st.error(final_answer)
-
-                st.session_state.current_a = final_answer
-                
-                # حفظ السؤال والإجابة في الهيستوري
-                st.session_state.history.append({
-                    "question": query,
-                    "answer": final_answer
-                })
-
-    # عرض النتيجة في الشاشة
-    if st.session_state.current_q:
-        with col_main:
-            st.markdown(f"""
-            <div class="question-box">
-                <strong>Question:</strong> "{st.session_state.current_q}"
-            </div>
-            """, unsafe_allow_html=True)
-            st.markdown(st.session_state.current_a)
+                        st.markdown(f"""
+                        <div class="recommendation-box">
+                            <h4 style="color:#c1121f;">Recommendation</h4>
+                            <p>{structured_data.get('recommendation', '')}</p>
+                            <h5 style="color:#669bbc;">Evidence (Excerpt)</h5>
+                            <p><i>"{structured_data.get('evidence', '')}"</i></p>
+                            <p><strong>Confidence:</strong> {structured_data.get('confidence', '')}</p>
+                        </div>
+                        """, unsafe_allow_html=True)
+                        
+                        st.markdown("### Structured Output (JSON)")
+                        st.markdown(f'<div class="json-box">{json.dumps(structured_data, indent=2)}</div>', unsafe_allow_html=True)
+                        
+                    except json.JSONDecodeError:
+                        st.error("Failed to parse structured JSON. Raw output:")
+                        st.write(response.text)
 
         with col_evidence:
-            st.markdown("### Retrieved Evidence (Top-3 Chunks)")
-            res_data = st.session_state.current_evidence
+            st.markdown("### Retrieved Evidence (Top Chunks)")
             if res_data and "ids" in res_data and len(res_data["ids"][0]) > 0:
-                for i in range(len(res_data["ids"][0])):
-                    doc_text = res_data["documents"][0][i]
-                    meta = res_data["metadatas"][0][i]
-                    dist = res_data["distances"][0][i]
-                    sim_score = round(1 - dist, 2)
-                    
+                for m, t, d in zip(res_data["metadatas"][0], res_data["documents"][0], res_data["distances"][0]):
                     st.markdown(f"""
                     <div class="evidence-box">
-                        <span class="score-badge">{sim_score}</span> <strong>{meta['section_title']} (p.{meta['page_numbers']})</strong><br><br>
-                        {doc_text[:250]}...
+                        <span class="score-badge">{round(1-d, 2)}</span> 
+                        <strong>{m['section_title']} (p.{m['page_numbers']})</strong><br><br>
+                        {t[:200]}...
                     </div>
                     """, unsafe_allow_html=True)
             else:
-                st.info("No relevant chunks retrieved.")
+                st.info("No chunks retrieved.")

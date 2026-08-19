@@ -181,7 +181,7 @@ elif st.session_state.page == "Ask Question":
                     user_prompt = f"CONTEXT:\n{chr(10).join(context_blocks)}\n\nUSER QUERY: {query}"
                     
                     try:
-                        model = genai.GenerativeModel(model_name="models/gemini-1.5-flash", system_instruction=RAG_SYSTEM_PROMPT)
+                       model = genai.GenerativeModel(model_name="models/gemini-flash", system_instruction=RAG_SYSTEM_PROMPT)
                         response = model.generate_content(user_prompt, generation_config=genai.types.GenerationConfig(temperature=0.0))
                         
                         json_str = extract_json(response.text)

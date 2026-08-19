@@ -165,11 +165,21 @@ if query:
                 
                 full_context = "\n\n".join(context_blocks)
                 user_prompt = f"CONTEXT:\n{full_context}\n\nUSER QUERY: {query}"
-                
-                model = genai.GenerativeModel(model_name="models/gemini-3.6-flash", system_instruction=RAG_SYSTEM_PROMPT)
-                response = model.generate_content(user_prompt, generation_config=genai.types.GenerationConfig(temperature=0.0))
-                
-                st.success("High Confidence Answer Generated")
+               try:
+    model = genai.GenerativeModel(model_name="models/gemini-3.6-flash", system_instruction=RAG_SYSTEM_PROMPT)
+    response = model.generate_content(user_prompt, generation_config=genai.types.GenerationConfig(temperature=0.0))
+    
+    st.success("High Confidence Answer Generated")
+    final_answer = response.text
+
+except Exception as e:
+    # التقاط إيرور نفاذ الرصيد وعرض رسالة للمستخدم بدل ما الـ App يقفل
+    if "429" in str(e) or "ResourceExhausted" in str(e):
+        final_answer = "⚠️ **API Quota Exceeded:** The system is currently receiving too many requests. Please wait a minute and try again."
+        st.warning(final_answer)
+    else:
+        final_answer = f"⚠️ **Error generating response:** {e}"
+        st.error(final_answer)
                 st.markdown(response.text)
 
     # عرض الأدلة في العمود الجانبي بألوان تناسب الـ Palette

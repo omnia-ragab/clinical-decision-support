@@ -170,7 +170,33 @@ elif st.session_state.page == "Ask Question":
                     context_blocks = [f"Doc: {m['document_name']}\nSec: {m['section_title']}\nPage: {m['page_numbers']}\nText: {t}" for m, t in zip(res_data["metadatas"][0], res_data["documents"][0])]
                     user_prompt = f"CONTEXT:\n{chr(10).join(context_blocks)}\n\nUSER QUERY: {query}"
                     
-                    model = genai.GenerativeModel("gemini-1.5-flash", system_instruction=RAG_SYSTEM_PROMPT)
+                    mtry:
+                        # تم تصحيح اسم الموديل بإضافة models/
+                        model = genai.GenerativeModel(model_name="models/gemini-1.5-flash", system_instruction=RAG_SYSTEM_PROMPT)
+                        response = model.generate_content(user_prompt, generation_config=genai.types.GenerationConfig(temperature=0.0))
+                        
+                        json_str = extract_json(response.text)
+                        structured_data = json.loads(json_str)
+                        
+                        st.markdown(f"""
+                        <div class="recommendation-box">
+                            <h4 style="color:#c1121f;">Recommendation</h4>
+                            <p>{structured_data.get('recommendation', '')}</p>
+                            <h5 style="color:#669bbc;">Evidence (Excerpt)</h5>
+                            <p><i>"{structured_data.get('evidence', '')}"</i></p>
+                            <p><strong>Confidence:</strong> {structured_data.get('confidence', '')}</p>
+                        </div>
+                        """, unsafe_allow_html=True)
+                        
+                        st.markdown("### Structured Output (JSON)")
+                        st.markdown(f'<div class="json-box">{json.dumps(structured_data, indent=2)}</div>', unsafe_allow_html=True)
+                        
+                    except json.JSONDecodeError:
+                        st.error("Failed to parse structured JSON. Raw output:")
+                        st.write(response.text)
+                    except Exception as e:
+                        final_answer = "⚠️ API Quota Exceeded. Please wait a minute and try again." if "429" in str(e) or "ResourceExhausted" in str(e) else f"Error: {e}"
+                        st.warning(final_answer)
                     response = model.generate_content(user_prompt, generation_config=genai.types.GenerationConfig(temperature=0.0))
                     
                     try:

@@ -1,2 +1,6 @@
-streamlit==1.37.0
-
+streamlit
+chromadb
+sentence-transformers
+google-generativeai
+numpy
+pandas

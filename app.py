@@ -5,16 +5,18 @@ import google.generativeai as genai
 import numpy as np
 
 # ==========================================
-# 1. Page Configuration & Custom CSS
+# 1. Page Configuration & Custom CSS (UI/UX)
 # ==========================================
 st.set_page_config(page_title="Medical RAG - WHO Hypertension", layout="wide", initial_sidebar_state="expanded")
 
+# تطبيق الألوان (Earthy Muted Palette) مع بوكس السؤال
 st.markdown("""
 <style>
     /* Charcoal Blue Sidebar */
     [data-testid="stSidebar"] {
         background-color: #2f3e46 !important;
     }
+    /* Ash Grey Sidebar Text */
     [data-testid="stSidebar"] * {
         color: #cad2c5 !important;
     }
@@ -28,11 +30,12 @@ st.markdown("""
         width: 100%;
         margin-bottom: 5px;
     }
+    /* Deep Teal Hover Effect */
     .stButton>button:hover {
         background-color: #52796f !important;
         color: white !important;
     }
-    /* Evidence Box */
+    /* Ash Grey Evidence Box with Deep Teal Border */
     .evidence-box {
         background-color: #cad2c5;
         color: #2f3e46;
@@ -42,7 +45,7 @@ st.markdown("""
         margin-bottom: 15px;
         font-size: 0.9em;
     }
-    /* Score Badge */
+    /* Muted Teal Score Badge */
     .score-badge {
         background-color: #84a98c;
         color: #2f3e46;
@@ -53,11 +56,11 @@ st.markdown("""
     }
     /* Custom Question Box */
     .question-box {
-        background-color: #f1f3f4;
-        color: #2f3e46;
+        background-color: #cad2c5; /* نفس لون الـ Ash Grey ليكون متناسق */
+        color: #2f3e46; /* لون الكتابة غامق للوضوح */
         padding: 15px;
         border-radius: 10px;
-        border: 1px solid #84a98c;
+        border: 1px solid #52796f; /* حدود بلون Deep Teal */
         margin-bottom: 20px;
         font-weight: 500;
         box-shadow: 0 2px 4px rgba(0,0,0,0.05);
@@ -91,7 +94,6 @@ if "current_evidence" not in st.session_state:
 with st.sidebar:
     st.markdown("### 🩺 Medical RAG System")
     st.markdown("---")
-    
     if st.button("💬 Ask Question"):
         st.session_state.page = "Ask Question"
     if st.button("🕒 History"):
@@ -139,6 +141,7 @@ def safe_query(question, top_k, threshold):
     
     if best_distance > threshold: 
         return {"in_scope": False, "retrieved_chunks": results}
+        
     return {"in_scope": True, "retrieved_chunks": results}
 
 RAG_SYSTEM_PROMPT = """
@@ -157,7 +160,7 @@ RULES:
 """
 
 # ==========================================
-# 5. Page Routing
+# 5. Page Routing & Main Layout
 # ==========================================
 
 if st.session_state.page == "Sources":
@@ -191,7 +194,7 @@ elif st.session_state.page == "History":
     if not st.session_state.history:
         st.info("No questions asked yet. Go to 'Ask Question' to start.")
     else:
-        for item in reversed(st.session_state.history): # عرض الأحدث أولاً
+        for item in reversed(st.session_state.history): 
             st.markdown(f"""
             <div class="question-box">
                 <strong>Question:</strong> "{item['question']}"
@@ -201,14 +204,14 @@ elif st.session_state.page == "History":
             st.markdown("---")
 
 elif st.session_state.page == "Ask Question":
-    st.title("🩺 Ask a Clinical Question")
+    st.title("🩺 Medical RAG System — WHO Hypertension")
     st.caption("Answering only from: WHO Guideline for the Pharmacological Treatment of Hypertension in Adults (2021)")
 
+    # تقسيم الشاشة لعمودين (السؤال/الإجابة 60% - الأدلة 40%)
     col_main, col_evidence = st.columns([6, 4])
 
-    # استقبال سؤال جديد
     query = st.chat_input("What is the recommended blood pressure threshold...?")
-    
+
     if query:
         st.session_state.current_q = query
         
@@ -225,6 +228,7 @@ elif st.session_state.page == "Ask Question":
                         "**2. Honesty:** I cannot generate clinical advice or provide information beyond the provided text with clinical certainty.\n\n"
                         "**3. Next Step:** Please consult a licensed medical professional or refer to appropriate external guidelines for safe and accurate guidance."
                     )
+                    st.error("Out of Scope / Safe Refusal Triggered")
                 else:
                     context_blocks = []
                     for i in range(len(res_data["ids"][0])):
@@ -241,17 +245,17 @@ elif st.session_state.page == "Ask Question":
                     model = genai.GenerativeModel(model_name="models/gemini-3.6-flash", system_instruction=RAG_SYSTEM_PROMPT)
                     response = model.generate_content(user_prompt, generation_config=genai.types.GenerationConfig(temperature=0.0))
                     
+                    st.success("High Confidence Answer Generated")
                     final_answer = response.text
                 
                 st.session_state.current_a = final_answer
                 
-                # حفظ في السجل (History)
                 st.session_state.history.append({
                     "question": query,
                     "answer": final_answer
                 })
 
-    # عرض السؤال الحالي وإجابته (إذا كان موجوداً)
+    # عرض السؤال الحالي وإجابته
     if st.session_state.current_q:
         with col_main:
             st.markdown(f"""
@@ -259,12 +263,11 @@ elif st.session_state.page == "Ask Question":
                 <strong>Question:</strong> "{st.session_state.current_q}"
             </div>
             """, unsafe_allow_html=True)
-            
             st.markdown(st.session_state.current_a)
 
-        # عرض الأدلة الخاصة بالسؤال الحالي في العمود الجانبي
+        # عرض الأدلة في العمود الجانبي بألوان تناسب الـ Palette
         with col_evidence:
-            st.markdown("### Retrieved Evidence")
+            st.markdown("### Retrieved Evidence (Top Chunks)")
             res_data = st.session_state.current_evidence
             if res_data and "ids" in res_data and len(res_data["ids"][0]) > 0:
                 for i in range(len(res_data["ids"][0])):

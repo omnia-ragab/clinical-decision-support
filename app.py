@@ -68,21 +68,22 @@ if "top_k" not in st.session_state: st.session_state.top_k = 3
 if "threshold" not in st.session_state: st.session_state.threshold = 0.45
 
 # ==========================================
-# 3. Sidebar Navigation & Awareness Section
+# 3. Sidebar Navigation (Cleaned without Emojis)
 # ==========================================
 with st.sidebar:
-    st.markdown("### 🌐 Chronic Diseases Support")
+    st.markdown("### Chronic Diseases Support")
     st.markdown("---")
-    if st.button("💬 Ask Clinical Question"): st.session_state.page = "Ask Question"
-    if st.button("📖 Chronic Awareness Hub"): st.session_state.page = "Awareness"
-    if st.button("🕒 Query History"): st.session_state.page = "History"
-    if st.button("📚 Guidelines Sources"): st.session_state.page = "Sources"
-    if st.button("ℹ️ About System"): st.session_state.page = "About"
-    if st.button("⚙️ System Guardrails"): st.session_state.page = "Settings"
+    if st.button("Ask Clinical Question"): st.session_state.page = "Ask Question"
+    if st.button("Chronic Awareness Hub"): st.session_state.page = "Awareness"
+    if st.button("Query History"): st.session_state.page = "History"
+    if st.button("Guidelines Sources"): st.session_state.page = "Sources"
+    if st.button("About System"): st.session_state.page = "About"
+    if st.button("System Guardrails"): st.session_state.page = "Settings"
     
     st.markdown("---")
-    st.markdown("**Hackathon Project:** AI Clinical Decision Support Lite")
-    st.markdown("**Theme:** Deep Sea & Evidence-Grounded RAG")
+    st.markdown("Created by Omnia Ragab")
+    st.markdown("Hackathon Project: AI Clinical Decision Support Lite")
+    st.markdown("Theme: Deep Sea & Evidence-Grounded RAG")
 
 # ==========================================
 # 4. Local Model & DB Initialization
@@ -149,43 +150,58 @@ def generate_local_response(res_data, guideline_name):
 # 5. Page Routing & UI Rendering
 # ==========================================
 if st.session_state.page == "About":
-    st.title("ℹ️ About Chronic Diseases Clinical Support")
+    st.title("About Chronic Diseases Clinical Support")
     st.markdown("---")
     st.write("This application is an offline-first, zero-latency clinical decision support RAG pipeline built for managing chronic illnesses securely.")
     st.markdown("### Core Philosophy")
-    st.info("Fluent $\\rightarrow$ Safe. All outputs are strictly grounded in verified public health guidelines with explicit page citations and zero hallucination guardrails.")
+    st.info("Fluent -> Safe. All outputs are strictly grounded in verified public health guidelines with explicit page citations and zero hallucination guardrails.")
 
 elif st.session_state.page == "Awareness":
-    st.title("📖 Chronic Diseases Awareness & Education Hub")
+    st.title("Chronic Diseases Awareness Hub")
     st.markdown("---")
-    st.markdown("A comprehensive guide on the three major chronic conditions covered in our clinical database:")
+    st.write("Select a disease below to read detailed clinical insights and awareness articles based on international guidelines:")
     
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.subheader("🩺 Hypertension")
-        st.markdown("**Overview:** Chronic high blood pressure forcing blood against artery walls. Managed through pharmacological interventions (WHO 2021) and lifestyle modifications.")
-    with col2:
-        st.subheader("🩸 Diabetes Mellitus")
-        st.markdown("**Overview:** Metabolic disorder characterized by elevated blood glucose levels due to insulin resistance or deficiency, requiring targeted treatments (WHO 2018).")
-    with col3:
-        st.subheader("🌬️ Asthma Management")
-        st.markdown("**Overview:** Chronic inflammatory respiratory disease causing airway narrowing, monitored and managed via evidence-based protocols (NICE 2024).")
+    selected_disease_article = st.selectbox("Choose a disease for detailed overview:", ["Hypertension (High Blood Pressure)", "Diabetes Mellitus", "Asthma Management"])
+    
+    st.markdown("---")
+    if "Hypertension" in selected_disease_article:
+        st.subheader("Hypertension Clinical Overview (WHO Guidelines)")
+        st.write("""
+        Hypertension is a critical chronic condition where the force of blood against the artery walls is too high. 
+        According to WHO guidelines, pharmacological treatment should be initiated for individuals with confirmed hypertension 
+        when systolic blood pressure is >=140 mmHg or diastolic is >=90 mmHg. Management focuses on risk stratification, 
+        lifestyle modifications, and evidence-based first-line drug regimens to prevent cardiovascular complications, strokes, and renal disease.
+        """)
+    elif "Diabetes" in selected_disease_article:
+        st.subheader("Diabetes Mellitus Clinical Overview (WHO Guidelines)")
+        st.write("""
+        Diabetes mellitus is a metabolic disorder marked by hyperglycemia resulting from defects in insulin secretion, insulin action, or both. 
+        WHO guidelines emphasize targeted second- and third-line medication management, proper insulin selection (prioritizing human insulin for cost-effectiveness and resource profiles), 
+        and strict monitoring protocols to prevent long-term microvascular and macrovascular complications.
+        """)
+    elif "Asthma" in selected_disease_article:
+        st.subheader("Asthma Clinical Overview (NICE Guidelines)")
+        st.write("""
+        Asthma is a chronic inflammatory disorder of the airways characterized by variable symptoms and airflow limitation. 
+        NICE guidelines highlight objective diagnostic testing (such as FeNO testing and spirometry) and recommend modern management strategies 
+        including low-dose inhaled corticosteroid (ICS) combined with formoterol as needed to maintain control and minimize exacerbation risks.
+        """)
 
 elif st.session_state.page == "Sources":
-    st.title("📚 Official Guideline Sources")
+    st.title("Official Guideline Sources")
     st.markdown("---")
     st.markdown("1. **WHO Guideline for the Pharmacological Treatment of Hypertension in Adults (2021)**")
     st.markdown("2. **WHO Guideline for Second- and Third-Line Medicines and Type of Insulin for Diabetes (2018)**")
     st.markdown("3. **NICE Guideline on Asthma: Diagnosis, Monitoring and Chronic Management (NG245 - 2024)**")
 
 elif st.session_state.page == "Settings":
-    st.title("⚙️ System Guardrails & Hyperparameters")
+    st.title("System Guardrails & Hyperparameters")
     st.markdown("---")
     st.session_state.top_k = st.slider("Top-K Chunks", 1, 5, st.session_state.top_k)
     st.session_state.threshold = st.slider("Distance Threshold (Guardrail)", 0.10, 0.60, st.session_state.threshold, 0.05)
 
 elif st.session_state.page == "History":
-    st.title("🕒 Query History")
+    st.title("Query History")
     st.markdown("---")
     if not st.session_state.history:
         st.info("No queries recorded yet.")
@@ -200,17 +216,10 @@ elif st.session_state.page == "Ask Question":
     st.markdown("Evidence-based guidance retrieval system for chronic disease management.")
     
     st.markdown("### 1. Select Clinical Domain")
-    selected_guideline = st.radio("Choose the guideline context:", list(collections.keys()), horizontal=True)
+    # استبدال الـ Radio بوكس اختيار منظم وسلس
+    selected_guideline = st.selectbox("Choose the guideline context:", list(collections.keys()))
     active_collection = collections[selected_guideline]
     
-    # عرض صورة توضيحية حسب المرض المختار لتعزيز الـ Mood
-    if "Hypertension" in selected_guideline:
-        st.info("🩺 **Active Focus:** Hypertension (Blood Pressure Management & Guidelines)")
-    elif "Diabetes" in selected_guideline:
-        st.info("🩸 **Active Focus:** Diabetes Mellitus (Glucose & Insulin Management)")
-    elif "Asthma" in selected_guideline:
-        st.info("🌬️ **Active Focus:** Asthma (Respiratory Care & Diagnostics)")
-
     st.markdown("### 2. Enter Clinical Query")
     query = st.chat_input(f"Ask about {selected_guideline}...")
 

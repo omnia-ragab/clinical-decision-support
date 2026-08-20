@@ -8,11 +8,10 @@ import re
 # ==========================================
 # 1. Page Configuration & Custom CSS (Deep Sea Dark Mode)
 # ==========================================
-st.set_page_config(page_title="Chronic Diseases Clinical Support ᴸᴵᵀᴱ", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="Chronic Diseases Clinical Support", layout="wide", initial_sidebar_state="expanded")
 
 st.markdown("""
 <style>
-    /* Global Dark Mode Deep Sea Theme */
     .stApp {
         background-color: #0d1b2a !important;
         color: #e0e1dd !important;
@@ -23,15 +22,11 @@ st.markdown("""
     [data-testid="stSidebar"] * {
         color: #e0e1dd !important;
     }
-    
-    /* Buttons */
     .stButton>button {
         border-radius: 8px; text-align: left; background-color: #415a77 !important;
         color: #e0e1dd !important; border: none; width: 100%; margin-bottom: 5px; font-weight: bold;
     }
     .stButton>button:hover { background-color: #778da9 !important; color: #0d1b2a !important; }
-    
-    /* Main Output Cards */
     .recommendation-box {
         background-color: #1b263b; padding: 20px; border-radius: 8px;
         border-top: 5px solid #778da9; margin-bottom: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.3);
@@ -68,7 +63,7 @@ if "top_k" not in st.session_state: st.session_state.top_k = 3
 if "threshold" not in st.session_state: st.session_state.threshold = 0.45
 
 # ==========================================
-# 3. Sidebar Navigation (Cleaned without Emojis)
+# 3. Sidebar Navigation
 # ==========================================
 with st.sidebar:
     st.markdown("### Chronic Diseases Support")
@@ -82,8 +77,6 @@ with st.sidebar:
     
     st.markdown("---")
     st.markdown("Created by Omnia Ragab")
-    st.markdown("Hackathon Project: AI Clinical Decision Support Lite")
-    st.markdown("Theme: Deep Sea & Evidence-Grounded RAG")
 
 # ==========================================
 # 4. Local Model & DB Initialization
@@ -159,33 +152,45 @@ if st.session_state.page == "About":
 elif st.session_state.page == "Awareness":
     st.title("Chronic Diseases Awareness Hub")
     st.markdown("---")
-    st.write("Select a disease below to read detailed clinical insights and awareness articles based on international guidelines:")
+    st.write("Select a disease below to read detailed clinical insights and view guideline visuals:")
     
     selected_disease_article = st.selectbox("Choose a disease for detailed overview:", ["Hypertension (High Blood Pressure)", "Diabetes Mellitus", "Asthma Management"])
     
     st.markdown("---")
     if "Hypertension" in selected_disease_article:
-        st.subheader("Hypertension Clinical Overview (WHO Guidelines)")
-        st.write("""
-        Hypertension is a critical chronic condition where the force of blood against the artery walls is too high. 
-        According to WHO guidelines, pharmacological treatment should be initiated for individuals with confirmed hypertension 
-        when systolic blood pressure is >=140 mmHg or diastolic is >=90 mmHg. Management focuses on risk stratification, 
-        lifestyle modifications, and evidence-based first-line drug regimens to prevent cardiovascular complications, strokes, and renal disease.
-        """)
+        col_img, col_text = st.columns([4, 6])
+        with col_img:
+            st.image("image/hypertension.jpg", caption="Hypertension Guideline Context", use_column_width=True)
+        with col_text:
+            st.subheader("Hypertension Clinical Overview (WHO Guidelines)")
+            st.write("""
+            Hypertension is a critical chronic condition where the force of blood against the artery walls is too high. 
+            According to WHO guidelines, pharmacological treatment should be initiated for individuals with confirmed hypertension 
+            when systolic blood pressure is >=140 mmHg or diastolic is >=90 mmHg. Management focuses on risk stratification, 
+            lifestyle modifications, and evidence-based first-line drug regimens to prevent cardiovascular complications, strokes, and renal disease.
+            """)
     elif "Diabetes" in selected_disease_article:
-        st.subheader("Diabetes Mellitus Clinical Overview (WHO Guidelines)")
-        st.write("""
-        Diabetes mellitus is a metabolic disorder marked by hyperglycemia resulting from defects in insulin secretion, insulin action, or both. 
-        WHO guidelines emphasize targeted second- and third-line medication management, proper insulin selection (prioritizing human insulin for cost-effectiveness and resource profiles), 
-        and strict monitoring protocols to prevent long-term microvascular and macrovascular complications.
-        """)
+        col_img, col_text = st.columns([4, 6])
+        with col_img:
+            st.image("image/diabetes.jpg", caption="Diabetes Guideline Context", use_column_width=True)
+        with col_text:
+            st.subheader("Diabetes Mellitus Clinical Overview (WHO Guidelines)")
+            st.write("""
+            Diabetes mellitus is a metabolic disorder marked by hyperglycemia resulting from defects in insulin secretion, insulin action, or both. 
+            WHO guidelines emphasize targeted second- and third-line medication management, proper insulin selection (prioritizing human insulin for cost-effectiveness and resource profiles), 
+            and strict monitoring protocols to prevent long-term microvascular and macrovascular complications.
+            """)
     elif "Asthma" in selected_disease_article:
-        st.subheader("Asthma Clinical Overview (NICE Guidelines)")
-        st.write("""
-        Asthma is a chronic inflammatory disorder of the airways characterized by variable symptoms and airflow limitation. 
-        NICE guidelines highlight objective diagnostic testing (such as FeNO testing and spirometry) and recommend modern management strategies 
-        including low-dose inhaled corticosteroid (ICS) combined with formoterol as needed to maintain control and minimize exacerbation risks.
-        """)
+        col_img, col_text = st.columns([4, 6])
+        with col_img:
+            st.image("image/asthma.jpg", caption="Asthma Guideline Context", use_column_width=True)
+        with col_text:
+            st.subheader("Asthma Clinical Overview (NICE Guidelines)")
+            st.write("""
+            Asthma is a chronic inflammatory disorder of the airways characterized by variable symptoms and airflow limitation. 
+            NICE guidelines highlight objective diagnostic testing (such as FeNO testing and spirometry) and recommend modern management strategies 
+            including low-dose inhaled corticosteroid (ICS) combined with formoterol as needed to maintain control and minimize exacerbation risks.
+            """)
 
 elif st.session_state.page == "Sources":
     st.title("Official Guideline Sources")
@@ -213,10 +218,8 @@ elif st.session_state.page == "History":
 
 elif st.session_state.page == "Ask Question":
     st.title("Chronic Diseases Clinical Decision Support")
-    st.markdown("Evidence-based guidance retrieval system for chronic disease management.")
     
     st.markdown("### 1. Select Clinical Domain")
-    # استبدال الـ Radio بوكس اختيار منظم وسلس
     selected_guideline = st.selectbox("Choose the guideline context:", list(collections.keys()))
     active_collection = collections[selected_guideline]
     

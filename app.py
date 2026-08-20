@@ -5,6 +5,7 @@ import google.generativeai as genai
 import numpy as np
 import json
 import re
+import time
 
 # ==========================================
 # 1. Page Configuration & Custom CSS
@@ -13,18 +14,13 @@ st.set_page_config(page_title="Clinical Decision Support ᴸᴵᵀᴱ", layout="
 
 st.markdown("""
 <style>
-    /* Deep Space Blue Sidebar */
     [data-testid="stSidebar"] { background-color: #003049 !important; }
     [data-testid="stSidebar"] * { color: #fdf0d5 !important; }
-    
-    /* Buttons */
     .stButton>button {
         border-radius: 8px; text-align: left; background-color: #669bbc !important;
         color: #fdf0d5 !important; border: none; width: 100%; margin-bottom: 5px;
     }
     .stButton>button:hover { background-color: #c1121f !important; color: white !important; }
-    
-    /* Main Output Cards */
     .recommendation-box {
         background-color: #ffffff; padding: 20px; border-radius: 8px;
         border-top: 4px solid #003049; margin-bottom: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);
@@ -41,7 +37,6 @@ st.markdown("""
         background-color: #003049; color: #669bbc; padding: 15px; border-radius: 8px;
         font-family: monospace; font-size: 0.85em; overflow-x: auto;
     }
-    /* Headers */
     h1, h2, h3 { color: #003049 !important; }
 </style>
 """, unsafe_allow_html=True)
@@ -133,6 +128,20 @@ def extract_json(text):
     match = re.search(r'\{.*\}', text, re.DOTALL)
     return match.group(0) if match else "{}"
 
+# دالة ذكية لإعادة المحاولة أوتوماتيك لو حصل ضغط على الـ API
+def generate_with_retry(model, prompt, retries=3, delay=2):
+    for attempt in range(retries):
+        try:
+            response = model.generate_content(prompt, generation_config=genai.types.GenerationConfig(temperature=0.0))
+            return response.text
+        except Exception as e:
+            if "429" in str(e) or "ResourceExhausted" in str(e):
+                if attempt < retries - 1:
+                    time.sleep(delay * (attempt + 1)) # انتظار تصاعدي
+                    continue
+            raise e
+    raise Exception("API Rate limit exceeded after retries.")
+
 # ==========================================
 # 5. Page Routing
 # ==========================================
@@ -170,22 +179,21 @@ elif st.session_state.page == "Ask Question":
         
         with col_main:
             st.markdown(f"**Question:** {query}")
-            with st.spinner("Analyzing guidelines..."):
+            with st.spinner("Analyzing guidelines securely..."):
                 retrieval_result = safe_query(active_collection, query, top_k=st.session_state.top_k)
                 res_data = retrieval_result["retrieved_chunks"]
                 
                 if not retrieval_result["in_scope"]:
-                    st.error("⚠️ Refusal Triggered: Out-of-Scope Question")
+                    st.error("⚠️ Refusal Triggered: Out-of-Scope Question. Please ask within clinical guidelines.")
                 else:
                     context_blocks = [f"Doc: {m['document_name']}\nSec: {m['section_title']}\nPage: {m['page_numbers']}\nText: {t}" for m, t in zip(res_data["metadatas"][0], res_data["documents"][0])]
                     user_prompt = f"CONTEXT:\n{chr(10).join(context_blocks)}\n\nUSER QUERY: {query}"
                     
                     try:
-                        # التحديث للموديل المطلوب رسمياً من الـ API
                         model = genai.GenerativeModel(model_name="models/gemini-3.6-flash", system_instruction=RAG_SYSTEM_PROMPT)
-                        response = model.generate_content(user_prompt, generation_config=genai.types.GenerationConfig(temperature=0.0))
+                        raw_response_text = generate_with_retry(model, user_prompt)
                         
-                        json_str = extract_json(response.text)
+                        json_str = extract_json(raw_response_text)
                         structured_data = json.loads(json_str)
                         
                         st.markdown(f"""
@@ -205,10 +213,9 @@ elif st.session_state.page == "Ask Question":
                         
                     except json.JSONDecodeError:
                         st.error("Failed to parse structured JSON. Raw output:")
-                        st.write(response.text)
+                        st.write(raw_response_text)
                     except Exception as e:
-                        err_msg = "⚠️ API Quota Exceeded. Please wait a minute and try again." if "429" in str(e) or "ResourceExhausted" in str(e) else f"Error: {e}"
-                        st.warning(err_msg)
+                        st.warning("⚠️ The system is experiencing high traffic (API Limit). Please wait 5 seconds and click/enter your question again.")
 
         with col_evidence:
             st.markdown("### Retrieved Evidence (Top Chunks)")

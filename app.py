@@ -240,14 +240,14 @@ elif st.session_state.page == "Ask Question":
                     st.markdown(f"""
                     <div class="refusal-box">
                         <h3 style="color: #e0e1dd;">🛡️ Clinical Safety Guardrail Triggered (Safe Refusal)</h3>
-                        <p><strong>1. Insufficiency:</strong> The provided clinical guidelines do not contain data or recommendations to address your specific emergency or out-of-scope question.</p>
-                        <p><strong>2. Honesty:</strong> I cannot generate clinical advice or provide personalized medical interventions beyond the verified guidelines with clinical certainty.</p>
-                        <p><strong>3. Next Step:</strong> Please consult a licensed medical professional immediately or refer to appropriate emergency medical services for safe guidance.</p>
+                        <p><strong>1. Insufficiency:</strong> The indexed public health guidelines ({selected_guideline}) do not contain data or recommendations covering emergency individual interventions, severe acute symptoms, or personalized medical prescriptions.</p>
+                        <p><strong>2. Honesty:</strong> As a clinical decision support tool, I cannot generate specific medical advice or handle out-of-scope emergency queries beyond our validated document scope with clinical certainty.</p>
+                        <p><strong>3. Next Step:</strong> Please consult a licensed medical professional immediately or contact emergency services for proper acute clinical management.</p>
                         <hr style="border-color: #778da9;">
                         <p><strong>Guardrail Metrics & Traceability:</strong></p>
                         <ul>
                             <li>Best retrieved similarity distance: {round(best_dist, 2)} (Exceeds threshold {st.session_state.threshold})</li>
-                            <li>Query classification: Out-of-Scope / Personal Medical Intervention</li>
+                            <li>Query Classification: Out-of-Scope / Personal Medical Intervention / Emergency Context</li>
                             <li>Zero hallucination and patient safety policy enforced</li>
                         </ul>
                     </div>

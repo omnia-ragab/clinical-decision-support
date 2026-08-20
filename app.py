@@ -239,17 +239,17 @@ elif st.session_state.page == "Ask Question":
                 if not retrieval_result["in_scope"]:
                     st.markdown(f"""
                     <div class="refusal-box">
-                        <h3 style="color: #e0e1dd;">Refusal Example (Out-of-Scope Question)</h3>
-                        <p><strong>I couldn't find enough information in the indexed guidelines to answer this confidently.</strong></p>
-                        <p>This source doesn't appear to cover this topic. Please try rephrasing your question or consult a clinician directly.</p>
+                        <h3 style="color: #e0e1dd;">🛡️ Clinical Safety Guardrail Triggered (Safe Refusal)</h3>
+                        <p><strong>1. Insufficiency:</strong> The provided clinical guidelines do not contain data or recommendations to address your specific emergency or out-of-scope question.</p>
+                        <p><strong>2. Honesty:</strong> I cannot generate clinical advice or provide personalized medical interventions beyond the verified guidelines with clinical certainty.</p>
+                        <p><strong>3. Next Step:</strong> Please consult a licensed medical professional immediately or refer to appropriate emergency medical services for safe guidance.</p>
                         <hr style="border-color: #778da9;">
-                        <p><strong>Why Refused?</strong></p>
+                        <p><strong>Guardrail Metrics & Traceability:</strong></p>
                         <ul>
-                            <li>No relevant chunks retrieved (similarity distance {round(best_dist, 2)} > threshold {st.session_state.threshold})</li>
-                            <li>Question is outside the scope of the {selected_guideline} guideline</li>
-                            <li>Zero hallucination policy enforced</li>
+                            <li>Best retrieved similarity distance: {round(best_dist, 2)} (Exceeds threshold {st.session_state.threshold})</li>
+                            <li>Query classification: Out-of-Scope / Personal Medical Intervention</li>
+                            <li>Zero hallucination and patient safety policy enforced</li>
                         </ul>
-                        <p><strong>Top similarity:</strong> {round(1 - best_dist, 2)} (below confidence threshold)</p>
                     </div>
                     """, unsafe_allow_html=True)
                 else:

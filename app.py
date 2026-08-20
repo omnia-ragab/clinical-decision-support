@@ -128,19 +128,25 @@ def extract_json(text):
     match = re.search(r'\{.*\}', text, re.DOTALL)
     return match.group(0) if match else "{}"
 
-# دالة ذكية لإعادة المحاولة أوتوماتيك لو حصل ضغط على الـ API
-def generate_with_retry(model, prompt, retries=3, delay=2):
-    for attempt in range(retries):
+# دالة مخبأة (Cached) لمنع تكرار استهلاك الـ API لنفس السؤال
+@st.cache_data(show_spinner=False)
+def cached_generate_answer(prompt_text):
+    models_to_try = ["models/gemini-3.6-flash", "models/gemini-1.5-flash", "models/gemini-flash"]
+    last_error = None
+    
+    for mod_name in models_to_try:
         try:
-            response = model.generate_content(prompt, generation_config=genai.types.GenerationConfig(temperature=0.0))
+            model = genai.GenerativeModel(model_name=mod_name, system_instruction=RAG_SYSTEM_PROMPT)
+            response = model.generate_content(prompt_text, generation_config=genai.types.GenerationConfig(temperature=0.0))
             return response.text
         except Exception as e:
+            last_error = e
             if "429" in str(e) or "ResourceExhausted" in str(e):
-                if attempt < retries - 1:
-                    time.sleep(delay * (attempt + 1)) # انتظار تصاعدي
-                    continue
-            raise e
-    raise Exception("API Rate limit exceeded after retries.")
+                time.sleep(1)
+                continue
+            else:
+                continue
+    raise last_error
 
 # ==========================================
 # 5. Page Routing
@@ -190,8 +196,7 @@ elif st.session_state.page == "Ask Question":
                     user_prompt = f"CONTEXT:\n{chr(10).join(context_blocks)}\n\nUSER QUERY: {query}"
                     
                     try:
-                        model = genai.GenerativeModel(model_name="models/gemini-3.6-flash", system_instruction=RAG_SYSTEM_PROMPT)
-                        raw_response_text = generate_with_retry(model, user_prompt)
+                        raw_response_text = cached_generate_answer(user_prompt)
                         
                         json_str = extract_json(raw_response_text)
                         structured_data = json.loads(json_str)
@@ -215,7 +220,7 @@ elif st.session_state.page == "Ask Question":
                         st.error("Failed to parse structured JSON. Raw output:")
                         st.write(raw_response_text)
                     except Exception as e:
-                        st.warning("⚠️ The system is experiencing high traffic (API Limit). Please wait 5 seconds and click/enter your question again.")
+                        st.error("⚠️ Free API rate limit reached. Because Streamlit has cached this session, please try your question again in a few seconds or rephrase slightly.")
 
         with col_evidence:
             st.markdown("### Retrieved Evidence (Top Chunks)")

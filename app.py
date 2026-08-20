@@ -6,41 +6,56 @@ import json
 import re
 
 # ==========================================
-# 1. Page Configuration & Custom CSS
+# 1. Page Configuration & Custom CSS (Deep Sea Dark Mode)
 # ==========================================
-st.set_page_config(page_title="Clinical Decision Support ᴸᴵᵀᴱ", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="Chronic Diseases Clinical Support ᴸᴵᵀᴱ", layout="wide", initial_sidebar_state="expanded")
 
 st.markdown("""
 <style>
-    [data-testid="stSidebar"] { background-color: #2b2d42 !important; }
-    [data-testid="stSidebar"] * { color: #edf2f4 !important; }
-    .stButton>button {
-        border-radius: 8px; text-align: left; background-color: #8d99ae !important;
-        color: #2b2d42 !important; border: none; width: 100%; margin-bottom: 5px; font-weight: bold;
+    /* Global Dark Mode Deep Sea Theme */
+    .stApp {
+        background-color: #0d1b2a !important;
+        color: #e0e1dd !important;
     }
-    .stButton>button:hover { background-color: #ef233c !important; color: white !important; }
+    [data-testid="stSidebar"] {
+        background-color: #1b263b !important;
+    }
+    [data-testid="stSidebar"] * {
+        color: #e0e1dd !important;
+    }
+    
+    /* Buttons */
+    .stButton>button {
+        border-radius: 8px; text-align: left; background-color: #415a77 !important;
+        color: #e0e1dd !important; border: none; width: 100%; margin-bottom: 5px; font-weight: bold;
+    }
+    .stButton>button:hover { background-color: #778da9 !important; color: #0d1b2a !important; }
+    
+    /* Main Output Cards */
     .recommendation-box {
-        background-color: #ffffff; padding: 20px; border-radius: 8px;
-        border-top: 5px solid #d90429; margin-bottom: 15px; box-shadow: 0 2px 6px rgba(0,0,0,0.1);
-        color: #2b2d42;
+        background-color: #1b263b; padding: 20px; border-radius: 8px;
+        border-top: 5px solid #778da9; margin-bottom: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+        color: #e0e1dd;
     }
     .refusal-box {
-        background-color: #fdf2f2; border: 1px solid #ef233c; padding: 20px;
-        border-radius: 8px; color: #d90429; margin-bottom: 15px;
+        background-color: #2b1b1b; border: 1px solid #778da9; padding: 20px;
+        border-radius: 8px; color: #e0e1dd; margin-bottom: 15px;
     }
     .evidence-box {
-        background-color: #edf2f4; color: #2b2d42; padding: 15px; border-radius: 8px;
-        border-left: 6px solid #8d99ae; margin-bottom: 15px; font-size: 0.9em;
+        background-color: #1b263b; color: #e0e1dd; padding: 15px; border-radius: 8px;
+        border-left: 6px solid #415a77; margin-bottom: 15px; font-size: 0.9em;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.2);
     }
     .score-badge {
-        background-color: #2b2d42; color: #edf2f4; padding: 3px 8px; border-radius: 12px;
+        background-color: #415a77; color: #e0e1dd; padding: 3px 8px; border-radius: 12px;
         font-size: 0.8em; font-weight: bold;
     }
     .json-box {
-        background-color: #2b2d42; color: #8d99ae; padding: 15px; border-radius: 8px;
+        background-color: #0d1b2a; color: #778da9; padding: 15px; border-radius: 8px;
         font-family: monospace; font-size: 0.85em; overflow-x: auto;
+        border: 1px solid #415a77;
     }
-    h1, h2, h3 { color: #2b2d42 !important; }
+    h1, h2, h3, h4, h5 { color: #e0e1dd !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -50,26 +65,27 @@ st.markdown("""
 if "page" not in st.session_state: st.session_state.page = "Ask Question"
 if "history" not in st.session_state: st.session_state.history = []
 if "top_k" not in st.session_state: st.session_state.top_k = 3
-if "threshold" not in st.session_state: st.session_state.threshold = 0.45  # تم تعديلها لتكون ألطف وأكثر مرونة للأسئلة الصحيحة
+if "threshold" not in st.session_state: st.session_state.threshold = 0.45
 
 # ==========================================
-# 3. Sidebar Navigation & About Section
+# 3. Sidebar Navigation & Awareness Section
 # ==========================================
 with st.sidebar:
-    st.markdown("### 🛡️ Clinical Decision Support ᴸᴵᵀᴱ")
+    st.markdown("### 🌐 Chronic Diseases Support")
     st.markdown("---")
-    if st.button("💬 Ask Question"): st.session_state.page = "Ask Question"
-    if st.button("🕒 History"): st.session_state.page = "History"
-    if st.button("📚 Sources"): st.session_state.page = "Sources"
+    if st.button("💬 Ask Clinical Question"): st.session_state.page = "Ask Question"
+    if st.button("📖 Chronic Awareness Hub"): st.session_state.page = "Awareness"
+    if st.button("🕒 Query History"): st.session_state.page = "History"
+    if st.button("📚 Guidelines Sources"): st.session_state.page = "Sources"
     if st.button("ℹ️ About System"): st.session_state.page = "About"
-    if st.button("⚙️ Settings"): st.session_state.page = "Settings"
+    if st.button("⚙️ System Guardrails"): st.session_state.page = "Settings"
     
     st.markdown("---")
-    st.markdown("**Hackathon Team:** AI Clinical Decision Support Lite")
-    st.markdown("**Core Principle:** Fluent $\\rightarrow$ Safe[cite: 2]")
+    st.markdown("**Hackathon Project:** AI Clinical Decision Support Lite")
+    st.markdown("**Theme:** Deep Sea & Evidence-Grounded RAG")
 
 # ==========================================
-# 4. Model & DB Initialization (Local Embedding & ChromaDB Only)
+# 4. Local Model & DB Initialization
 # ==========================================
 @st.cache_resource
 def load_embedding_model():
@@ -105,12 +121,10 @@ def safe_query(collection, question, top_k=3):
         return {"in_scope": False, "retrieved_chunks": results, "best_distance": best_distance}
     return {"in_scope": True, "retrieved_chunks": results, "best_distance": best_distance}
 
-# توليد الإجابة محلياً بدون أي API خارجي (Extractive Local RAG)
 def generate_local_response(res_data, guideline_name):
     top_doc = res_data["documents"][0][0]
     top_meta = res_data["metadatas"][0][0]
     
-    # تنظيف النص لعرضه كملخص
     clean_text = top_doc.replace("Title:", "").strip()
     if len(clean_text) > 400:
         clean_text = clean_text[:400] + "..."
@@ -135,18 +149,34 @@ def generate_local_response(res_data, guideline_name):
 # 5. Page Routing & UI Rendering
 # ==========================================
 if st.session_state.page == "About":
-    st.title("ℹ️ About Clinical Decision Support ᴸᴵᵀᴱ")
+    st.title("ℹ️ About Chronic Diseases Clinical Support")
     st.markdown("---")
-    st.write("This system is built for the AI Clinical Decision Support Hackathon (Organized by ITIDA, TIEC, Orange Digital Center, and Creativa)[cite: 2].")
-    st.markdown("### Core Architecture")
-    st.info("Standalone Local RAG Pipeline: Utilizes persistent vector indexing (ChromaDB), local embeddings (Sentence-Transformers), and strict semantic distance guarding for zero-latency, offline-capable clinical evidence retrieval.")
+    st.write("This application is an offline-first, zero-latency clinical decision support RAG pipeline built for managing chronic illnesses securely.")
+    st.markdown("### Core Philosophy")
+    st.info("Fluent $\\rightarrow$ Safe. All outputs are strictly grounded in verified public health guidelines with explicit page citations and zero hallucination guardrails.")
+
+elif st.session_state.page == "Awareness":
+    st.title("📖 Chronic Diseases Awareness & Education Hub")
+    st.markdown("---")
+    st.markdown("A comprehensive guide on the three major chronic conditions covered in our clinical database:")
+    
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.subheader("🩺 Hypertension")
+        st.markdown("**Overview:** Chronic high blood pressure forcing blood against artery walls. Managed through pharmacological interventions (WHO 2021) and lifestyle modifications.")
+    with col2:
+        st.subheader("🩸 Diabetes Mellitus")
+        st.markdown("**Overview:** Metabolic disorder characterized by elevated blood glucose levels due to insulin resistance or deficiency, requiring targeted treatments (WHO 2018).")
+    with col3:
+        st.subheader("🌬️ Asthma Management")
+        st.markdown("**Overview:** Chronic inflammatory respiratory disease causing airway narrowing, monitored and managed via evidence-based protocols (NICE 2024).")
 
 elif st.session_state.page == "Sources":
     st.title("📚 Official Guideline Sources")
     st.markdown("---")
     st.markdown("1. **WHO Guideline for the Pharmacological Treatment of Hypertension in Adults (2021)**")
     st.markdown("2. **WHO Guideline for Second- and Third-Line Medicines and Type of Insulin for Diabetes (2018)**")
-    st.markdown("3. **NICE Guideline on Asthma: Diagnosis, Monitoring and Chronic Management (NG245 - 2024)**[cite: 2]")
+    st.markdown("3. **NICE Guideline on Asthma: Diagnosis, Monitoring and Chronic Management (NG245 - 2024)**")
 
 elif st.session_state.page == "Settings":
     st.title("⚙️ System Guardrails & Hyperparameters")
@@ -166,12 +196,21 @@ elif st.session_state.page == "History":
             st.markdown("---")
 
 elif st.session_state.page == "Ask Question":
-    st.title("Clinical Decision Support Hub")
+    st.title("Chronic Diseases Clinical Decision Support")
+    st.markdown("Evidence-based guidance retrieval system for chronic disease management.")
     
     st.markdown("### 1. Select Clinical Domain")
     selected_guideline = st.radio("Choose the guideline context:", list(collections.keys()), horizontal=True)
     active_collection = collections[selected_guideline]
     
+    # عرض صورة توضيحية حسب المرض المختار لتعزيز الـ Mood
+    if "Hypertension" in selected_guideline:
+        st.info("🩺 **Active Focus:** Hypertension (Blood Pressure Management & Guidelines)")
+    elif "Diabetes" in selected_guideline:
+        st.info("🩸 **Active Focus:** Diabetes Mellitus (Glucose & Insulin Management)")
+    elif "Asthma" in selected_guideline:
+        st.info("🌬️ **Active Focus:** Asthma (Respiratory Care & Diagnostics)")
+
     st.markdown("### 2. Enter Clinical Query")
     query = st.chat_input(f"Ask about {selected_guideline}...")
 
@@ -185,14 +224,13 @@ elif st.session_state.page == "Ask Question":
                 res_data = retrieval_result["retrieved_chunks"]
                 best_dist = retrieval_result["best_distance"]
                 
-                # الرفض المنطقي الآمن
                 if not retrieval_result["in_scope"]:
                     st.markdown(f"""
                     <div class="refusal-box">
-                        <h3>Refusal Example (Out-of-Scope Question)</h3>
+                        <h3 style="color: #e0e1dd;">Refusal Example (Out-of-Scope Question)</h3>
                         <p><strong>I couldn't find enough information in the indexed guidelines to answer this confidently.</strong></p>
                         <p>This source doesn't appear to cover this topic. Please try rephrasing your question or consult a clinician directly.</p>
-                        <hr style="border-color: #ef233c;">
+                        <hr style="border-color: #778da9;">
                         <p><strong>Why Refused?</strong></p>
                         <ul>
                             <li>No relevant chunks retrieved (similarity distance {round(best_dist, 2)} > threshold {st.session_state.threshold})</li>
@@ -207,9 +245,9 @@ elif st.session_state.page == "Ask Question":
                     
                     st.markdown(f"""
                     <div class="recommendation-box">
-                        <h4 style="color:#ef233c;">Recommendation</h4>
+                        <h4 style="color:#778da9;">Recommendation</h4>
                         <p>{structured_data.get('recommendation', '')}</p>
-                        <h5 style="color:#2b2d42;">Evidence (Excerpt)</h5>
+                        <h5 style="color:#e0e1dd;">Evidence (Excerpt)</h5>
                         <p><i>"{structured_data.get('evidence', '')}"</i></p>
                         <p><strong>Confidence:</strong> {structured_data.get('confidence', '')}</p>
                     </div>
@@ -229,7 +267,7 @@ elif st.session_state.page == "Ask Question":
                     <div class="evidence-box">
                         <span class="score-badge">Similarity: {round(1-d, 2)}</span><br>
                         <strong>Section: {m['section_title']}</strong><br>
-                        <span style="color: #d90429; font-weight: bold;">Page(s): {pages_formatted}</span><br><br>
+                        <span style="color: #778da9; font-weight: bold;">Page(s): {pages_formatted}</span><br><br>
                         {t[:220]}...
                     </div>
                     """, unsafe_allow_html=True)

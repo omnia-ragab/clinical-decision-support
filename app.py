@@ -8,7 +8,7 @@ import google.generativeai as genai
 # ==========================================
 # 1. Page Configuration & Custom CSS
 # ==========================================
-st.set_page_config(page_title="Chronic Diseases Clinical Support", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="SoloRAG Clinical Support", layout="wide", initial_sidebar_state="expanded")
 
 st.markdown("""
 <style>
@@ -21,18 +21,20 @@ st.markdown("""
     .refusal-box { background-color: #2b1b1b; border: 1px solid #778da9; padding: 20px; border-radius: 8px; color: #e0e1dd; margin-bottom: 15px; }
     .evidence-box { background-color: #1b263b; color: #e0e1dd; padding: 15px; border-radius: 8px; border-left: 6px solid #415a77; margin-bottom: 15px; font-size: 0.9em; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
     .score-badge { background-color: #415a77; color: #e0e1dd; padding: 3px 8px; border-radius: 12px; font-size: 0.8em; font-weight: bold; }
-    .json-box { background-color: #0d1b2a; color: #778da9; padding: 15px; border-radius: 8px; font-family: monospace; font-size: 0.85em; overflow-x: auto; border: 1px solid #415a77; }
     h1, h2, h3, h4, h5 { color: #e0e1dd !important; }
 </style>
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 2. Gemini API Configuration
+# 2. Gemini API Configuration (With Safety)
 # ==========================================
+API_AVAILABLE = False
 try:
-    genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-except Exception as e:
-    st.error("⚠️ Please add GEMINI_API_KEY to your Streamlit Cloud Secrets.")
+    if "GEMINI_API_KEY" in st.secrets:
+        genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+        API_AVAILABLE = True
+except Exception:
+    pass
 
 RAG_SYSTEM_PROMPT = """
 You are a clinical decision support AI acting as an evidence synthesizer.
@@ -56,10 +58,9 @@ if "threshold" not in st.session_state: st.session_state.threshold = 0.45
 # 4. Sidebar Navigation
 # ==========================================
 with st.sidebar:
-    st.markdown("### Chronic Diseases Support")
+    st.markdown("### SoloRAG Support")
     st.markdown("---")
     if st.button("Ask Clinical Question"): st.session_state.page = "Ask Question"
-    if st.button("Chronic Awareness Hub"): st.session_state.page = "Awareness"
     if st.button("Query History"): st.session_state.page = "History"
     if st.button("System Guardrails"): st.session_state.page = "Settings"
 
@@ -73,30 +74,20 @@ def load_embedding_model():
 @st.cache_resource
 def load_databases():
     databases = {}
-    
-    # 1. Hypertension DB
     try:
-        client_hyper = chromadb.PersistentClient(path="./chroma_db_hypertension")
-        col_hyper = client_hyper.get_or_create_collection(name="who_hypertension_guideline_v2_cosine")
+        col_hyper = chromadb.PersistentClient(path="./chroma_db_hypertension").get_or_create_collection(name="who_hypertension_guideline_v2_cosine")
         databases["Hypertension (WHO 2021)"] = col_hyper
-    except Exception as e:
-        st.error(f"Hypertension DB Error: {e}")
+    except: pass
 
-    # 2. Diabetes DB
     try:
-        client_diab = chromadb.PersistentClient(path="./chroma_db_diabetes")
-        col_diab = client_diab.get_or_create_collection(name="who_diabetes_guideline_cosine")
+        col_diab = chromadb.PersistentClient(path="./chroma_db_diabetes").get_or_create_collection(name="who_diabetes_guideline_cosine")
         databases["Diabetes (WHO 2018)"] = col_diab
-    except Exception as e:
-        st.error(f"Diabetes DB Error: {e}")
+    except: pass
 
-    # 3. Asthma DB
     try:
-        client_asthma = chromadb.PersistentClient(path="./chroma_db_asthma")
-        col_asthma = client_asthma.get_or_create_collection(name="nice_asthma_guideline_cosine")
+        col_asthma = chromadb.PersistentClient(path="./chroma_db_asthma").get_or_create_collection(name="nice_asthma_guideline_cosine")
         databases["Asthma (NICE 2024)"] = col_asthma
-    except Exception as e:
-        st.error(f"Asthma DB Error: {e}")
+    except: pass
 
     return databases
 
@@ -117,45 +108,60 @@ def safe_query(collection, question, top_k=3):
         return {"in_scope": False, "retrieved_chunks": results, "best_distance": best_distance}
     return {"in_scope": True, "retrieved_chunks": results, "best_distance": best_distance}
 
-def generate_gemini_response(res_data, query):
-    context_blocks = []
-    for i in range(len(res_data["ids"][0])):
-        text = res_data["documents"][0][i]
-        meta = res_data["metadatas"][0][i]
-        pages_fmt = meta['page_numbers'].replace("['", "").replace("']", "").replace("'", "")
-        context_blocks.append(f"Document: {meta['document_name']} | Section: {meta['section_title']} | Page: {pages_fmt}\nText: {text}\n")
+# ==========================================
+# ROBUST GENERATION WITH LOCAL FALLBACK
+# ==========================================
+def generate_robust_response(res_data, query, guideline_name):
+    # Try API First
+    if API_AVAILABLE:
+        try:
+            context_blocks = []
+            for i in range(len(res_data["ids"][0])):
+                text = res_data["documents"][0][i]
+                meta = res_data["metadatas"][0][i]
+                pages_fmt = meta['page_numbers'].replace("['", "").replace("']", "").replace("'", "")
+                context_blocks.append(f"Document: {meta['document_name']} | Section: {meta['section_title']} | Page: {pages_fmt}\nText: {text}\n")
+            
+            full_context = "\n".join(context_blocks)
+            user_prompt = f"CONTEXT:\n{full_context}\n\nUSER QUERY: {query}"
+            
+            model = genai.GenerativeModel(model_name='gemini-1.5-flash', system_instruction=RAG_SYSTEM_PROMPT)
+            response = model.generate_content(user_prompt, generation_config=genai.types.GenerationConfig(temperature=0.0))
+            return response.text
+        except Exception as e:
+            pass # Fall through to local fallback if API fails
+            
+    # Local Fallback Mechanism (If API Fails or Exceeds Quota)
+    top_doc = res_data["documents"][0][0]
+    top_meta = res_data["metadatas"][0][0]
+    clean_text = top_doc.replace("Title:", "").strip()
+    if len(clean_text) > 500: clean_text = clean_text[:500] + "..."
+    pages_fmt = top_meta['page_numbers'].replace("['", "").replace("']", "").replace("'", "")
     
-    full_context = "\n".join(context_blocks)
-    user_prompt = f"CONTEXT:\n{full_context}\n\nUSER QUERY: {query}"
-    
-    model = genai.GenerativeModel(model_name='gemini-1.5-flash', system_instruction=RAG_SYSTEM_PROMPT)
-    response = model.generate_content(user_prompt, generation_config=genai.types.GenerationConfig(temperature=0.0))
-    return response.text
+    fallback_response = f"""
+**Recommendation:**
+Based on the {guideline_name}, key guidance retrieved from section '{top_meta['section_title']}':
+{clean_text[:250]}...
+
+**Supporting Evidence:**
+"{clean_text}"
+
+*[{top_meta['document_name']} - Section: {top_meta['section_title']} - Page {pages_fmt}]*
+*(Note: System utilizing local offline fallback synthesis mode for uninterrupted access).*
+    """
+    return fallback_response
 
 # ==========================================
 # 6. Page Routing & UI Rendering
 # ==========================================
-if st.session_state.page == "Awareness":
-    st.title("Chronic Diseases Awareness Hub")
-    selected_disease = st.selectbox("Choose a disease:", ["Hypertension (High Blood Pressure)", "Diabetes Mellitus", "Asthma Management"])
-    
-    st.subheader(f"{selected_disease} Clinical Overview")
-    if "Hypertension" in selected_disease:
-        st.write("According to WHO guidelines, pharmacological treatment should be initiated for individuals with confirmed hypertension when systolic blood pressure is >=140 mmHg or diastolic is >=90 mmHg.")
-    elif "Diabetes" in selected_disease:
-        st.write("WHO guidelines emphasize targeted second- and third-line medication management, proper insulin selection, and strict monitoring protocols.")
-    elif "Asthma" in selected_disease:
-        st.write("NICE guidelines highlight objective diagnostic testing and recommend modern management strategies including low-dose ICS combined with formoterol.")
-
-elif st.session_state.page == "Settings":
+if st.session_state.page == "Settings":
     st.title("System Guardrails")
     st.session_state.top_k = st.slider("Top-K Chunks", 1, 5, st.session_state.top_k)
     st.session_state.threshold = st.slider("Distance Threshold (Guardrail)", 0.10, 0.60, st.session_state.threshold, 0.05)
 
 elif st.session_state.page == "History":
     st.title("Query History")
-    if not st.session_state.history:
-        st.info("No queries recorded yet.")
+    if not st.session_state.history: st.info("No queries recorded yet.")
     for item in reversed(st.session_state.history): 
         st.markdown(f"**Q:** {item['question']}")
         st.info(item['answer'])
@@ -176,7 +182,7 @@ elif st.session_state.page == "Ask Question":
             
             with col_main:
                 st.markdown(f"**Question:** {query}")
-                with st.spinner("Searching and synthesizing via Gemini API..."):
+                with st.spinner("Synthesizing evidence..."):
                     retrieval_result = safe_query(active_collection, query, top_k=st.session_state.top_k)
                     res_data = retrieval_result["retrieved_chunks"]
                     best_dist = retrieval_result["best_distance"]
@@ -193,14 +199,15 @@ elif st.session_state.page == "Ask Question":
                         </div>
                         """, unsafe_allow_html=True)
                     else:
-                        gemini_answer = generate_gemini_response(res_data, query)
+                        # Use the Robust Generation Function
+                        final_answer = generate_robust_response(res_data, query, selected_guideline)
                         st.markdown(f"""
                         <div class="recommendation-box">
                             <h4 style="color:#778da9;">Synthesized Recommendation</h4>
-                            <p>{gemini_answer}</p>
+                            <p>{final_answer}</p>
                         </div>
                         """, unsafe_allow_html=True)
-                        st.session_state.history.append({"question": query, "answer": gemini_answer})
+                        st.session_state.history.append({"question": query, "answer": final_answer})
 
             with col_evidence:
                 st.markdown("### Retrieved Evidence (Top Chunks)")

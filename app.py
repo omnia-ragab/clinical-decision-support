@@ -22,7 +22,6 @@ st.markdown("""
     .refusal-box { background-color: #2b1b1b; border: 1px solid #778da9; padding: 20px; border-radius: 8px; color: #e0e1dd; margin-bottom: 15px; }
     .evidence-box { background-color: #1b263b; color: #e0e1dd; padding: 15px; border-radius: 8px; border-left: 6px solid #415a77; margin-bottom: 15px; font-size: 0.9em; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
     .score-badge { background-color: #415a77; color: #e0e1dd; padding: 3px 8px; border-radius: 12px; font-size: 0.8em; font-weight: bold; }
-    .json-box { background-color: #0d1b2a; color: #778da9; padding: 15px; border-radius: 8px; font-family: monospace; font-size: 0.85em; overflow-x: auto; border: 1px solid #415a77; }
     h1, h2, h3, h4, h5 { color: #e0e1dd !important; }
 </style>
 """, unsafe_allow_html=True)
@@ -33,7 +32,7 @@ st.markdown("""
 try:
     genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
 except Exception as e:
-    st.error("Please add GEMINI_API_KEY to your Streamlit Cloud Secrets.")
+    st.error("⚠️ Please add GEMINI_API_KEY to your Streamlit Cloud Secrets.")
 
 RAG_SYSTEM_PROMPT = """
 You are a clinical decision support AI acting as an evidence synthesizer.
@@ -75,6 +74,7 @@ def load_embedding_model():
 def load_databases():
     client_hyper = chromadb.PersistentClient(path="./chroma_db_hypertension")
     col_hyper = client_hyper.get_or_create_collection(name="who_hypertension_guideline_v2_cosine")
+    # Add other databases here if they exist, keeping it simple to avoid missing folder errors
     return {"Hypertension (WHO 2021)": col_hyper}
 
 embedding_model = load_embedding_model()
@@ -114,15 +114,18 @@ def generate_gemini_response(res_data, query):
 # ==========================================
 if st.session_state.page == "Awareness":
     st.title("Chronic Diseases Awareness Hub")
-    selected_disease = st.selectbox("Choose a disease:", ["Hypertension (High Blood Pressure)", "Diabetes Mellitus", "Asthma Management"])
+    selected_disease = st.selectbox("Choose a disease:", ["Hypertension (High Blood Pressure)"])
     
-    st.subheader(f"{selected_disease} Clinical Overview")
-    if "Hypertension" in selected_disease:
+    col_img, col_text = st.columns([4, 6])
+    with col_img:
+        # Safe image loading to prevent Streamlit crashes
+        if os.path.exists("image/hypertension.jpg"):
+            st.image("image/hypertension.jpg", caption="Hypertension Guideline Context", use_container_width=True)
+        else:
+            st.info("Image placeholder (Upload 'image/hypertension.jpg' to GitHub to display)")
+    with col_text:
+        st.subheader("Hypertension Clinical Overview")
         st.write("According to WHO guidelines, pharmacological treatment should be initiated for individuals with confirmed hypertension when systolic blood pressure is >=140 mmHg or diastolic is >=90 mmHg.")
-    elif "Diabetes" in selected_disease:
-        st.write("WHO guidelines emphasize targeted second- and third-line medication management, proper insulin selection, and strict monitoring protocols.")
-    elif "Asthma" in selected_disease:
-        st.write("NICE guidelines highlight objective diagnostic testing and recommend modern management strategies including low-dose ICS combined with formoterol.")
 
 elif st.session_state.page == "Settings":
     st.title("System Guardrails")
@@ -131,8 +134,6 @@ elif st.session_state.page == "Settings":
 
 elif st.session_state.page == "History":
     st.title("Query History")
-    if not st.session_state.history:
-        st.info("No queries recorded yet.")
     for item in reversed(st.session_state.history): 
         st.markdown(f"**Q:** {item['question']}")
         st.info(item['answer'])
@@ -158,12 +159,10 @@ elif st.session_state.page == "Ask Question":
                 if not retrieval_result["in_scope"]:
                     st.markdown(f"""
                     <div class="refusal-box">
-                        <h3 style="color: #e0e1dd;">🛡️ Clinical Safety Guardrail Triggered (Safe Refusal)</h3>
-                        <p><strong>1. Insufficiency:</strong> The indexed public health guidelines do not contain data or recommendations covering emergency individual interventions, severe acute symptoms, or personalized prescriptions.</p>
-                        <p><strong>2. Honesty:</strong> As a clinical decision support tool, I cannot generate specific medical advice or handle out-of-scope emergency queries beyond our validated document scope.</p>
-                        <p><strong>3. Next Step:</strong> Please consult a licensed medical professional immediately or contact emergency services for proper acute clinical management.</p>
-                        <hr style="border-color: #778da9;">
-                        <p><strong>Guardrail Metrics:</strong> Distance {round(best_dist, 2)} > Threshold {st.session_state.threshold} (Out of Scope)</p>
+                        <h3 style="color: #e0e1dd;">🛡️ Clinical Safety Guardrail Triggered</h3>
+                        <p><strong>1. Insufficiency:</strong> Guidelines do not cover this emergency or out-of-scope query.</p>
+                        <p><strong>2. Honesty:</strong> I cannot provide personalized medical interventions.</p>
+                        <p><strong>3. Next Step:</strong> Consult a licensed professional immediately.</p>
                     </div>
                     """, unsafe_allow_html=True)
                 else:

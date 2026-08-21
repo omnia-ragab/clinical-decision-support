@@ -61,8 +61,14 @@ with st.sidebar:
     st.markdown("### SoloRAG Support")
     st.markdown("---")
     if st.button("Ask Clinical Question"): st.session_state.page = "Ask Question"
+    if st.button("Chronic Awareness Hub"): st.session_state.page = "Awareness"
+    if st.button("About System"): st.session_state.page = "About"
     if st.button("Query History"): st.session_state.page = "History"
     if st.button("System Guardrails"): st.session_state.page = "Settings"
+    
+    # --- Footer Added Here ---
+    st.markdown("---")
+    st.markdown("<p style='text-align: center; color: #778da9;'>✨ Created by <strong>Omnia Ragab</strong></p>", unsafe_allow_html=True)
 
 # ==========================================
 # 5. Local Model & DB Initialization (ALL 3 DISEASES)
@@ -112,7 +118,6 @@ def safe_query(collection, question, top_k=3):
 # ROBUST GENERATION WITH LOCAL FALLBACK
 # ==========================================
 def generate_robust_response(res_data, query, guideline_name):
-    # Try API First
     if API_AVAILABLE:
         try:
             context_blocks = []
@@ -128,10 +133,9 @@ def generate_robust_response(res_data, query, guideline_name):
             model = genai.GenerativeModel(model_name='gemini-1.5-flash', system_instruction=RAG_SYSTEM_PROMPT)
             response = model.generate_content(user_prompt, generation_config=genai.types.GenerationConfig(temperature=0.0))
             return response.text
-        except Exception as e:
-            pass # Fall through to local fallback if API fails
+        except Exception:
+            pass 
             
-    # Local Fallback Mechanism (If API Fails or Exceeds Quota)
     top_doc = res_data["documents"][0][0]
     top_meta = res_data["metadatas"][0][0]
     clean_text = top_doc.replace("Title:", "").strip()
@@ -154,7 +158,26 @@ Based on the {guideline_name}, key guidance retrieved from section '{top_meta['s
 # ==========================================
 # 6. Page Routing & UI Rendering
 # ==========================================
-if st.session_state.page == "Settings":
+if st.session_state.page == "About":
+    st.title("About Chronic Diseases Clinical Support")
+    st.markdown("---")
+    st.write("This application is an offline-first, zero-latency clinical decision support RAG pipeline built for managing chronic illnesses securely.")
+    st.markdown("### Core Philosophy")
+    st.info("Fluent -> Safe. All outputs are strictly grounded in verified public health guidelines with explicit page citations and zero hallucination guardrails.")
+
+elif st.session_state.page == "Awareness":
+    st.title("Chronic Diseases Awareness Hub")
+    selected_disease = st.selectbox("Choose a disease:", ["Hypertension (High Blood Pressure)", "Diabetes Mellitus", "Asthma Management"])
+    
+    st.subheader(f"{selected_disease} Clinical Overview")
+    if "Hypertension" in selected_disease:
+        st.write("According to WHO guidelines, pharmacological treatment should be initiated for individuals with confirmed hypertension when systolic blood pressure is >=140 mmHg or diastolic is >=90 mmHg.")
+    elif "Diabetes" in selected_disease:
+        st.write("WHO guidelines emphasize targeted second- and third-line medication management, proper insulin selection, and strict monitoring protocols.")
+    elif "Asthma" in selected_disease:
+        st.write("NICE guidelines highlight objective diagnostic testing and recommend modern management strategies including low-dose ICS combined with formoterol.")
+
+elif st.session_state.page == "Settings":
     st.title("System Guardrails")
     st.session_state.top_k = st.slider("Top-K Chunks", 1, 5, st.session_state.top_k)
     st.session_state.threshold = st.slider("Distance Threshold (Guardrail)", 0.10, 0.60, st.session_state.threshold, 0.05)
@@ -199,7 +222,6 @@ elif st.session_state.page == "Ask Question":
                         </div>
                         """, unsafe_allow_html=True)
                     else:
-                        # Use the Robust Generation Function
                         final_answer = generate_robust_response(res_data, query, selected_guideline)
                         st.markdown(f"""
                         <div class="recommendation-box">

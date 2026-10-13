@@ -30,8 +30,14 @@ st.markdown("""
 # ==========================================
 # تم تعيين المفتاح الذي أرسلته مباشرة هنا
 OPENROUTER_API_KEY = ""
-API_AVAILABLE = bool(OPENROUTER_API_KEY)
+API_AVAILABLE = False
 
+try:
+    if "OPENROUTER_API_KEY" in st.secrets:
+        OPENROUTER_API_KEY = st.secrets["OPENROUTER_API_KEY"]
+        API_AVAILABLE = True
+except Exception:
+    pass
 RAG_SYSTEM_PROMPT = """
 You are a clinical decision support AI acting as an evidence synthesizer.
 Your ONLY source of truth is the provided clinical guidelines context.

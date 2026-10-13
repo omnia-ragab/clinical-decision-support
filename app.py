@@ -29,7 +29,7 @@ st.markdown("""
 # 2. OpenRouter API Configuration
 # ==========================================
 # تم تعيين المفتاح الذي أرسلته مباشرة هنا
-OPENROUTER_API_KEY = "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"
+OPENROUTER_API_KEY = ""
 API_AVAILABLE = bool(OPENROUTER_API_KEY)
 
 RAG_SYSTEM_PROMPT = """

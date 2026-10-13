@@ -3,12 +3,12 @@ import chromadb
 from sentence_transformers import SentenceTransformer
 import numpy as np
 import json
-import google.generativeai as genai
+import requests
 
 # ==========================================
 # 1. Page Configuration & Custom CSS
 # ==========================================
-st.set_page_config(page_title="SoloRAG Clinical Support", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="MediGuide RAG: Clinical Support", layout="wide", initial_sidebar_state="expanded")
 
 st.markdown("""
 <style>
@@ -26,15 +26,11 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 2. Gemini API Configuration (With Safety)
+# 2. OpenRouter API Configuration
 # ==========================================
-API_AVAILABLE = False
-try:
-    if "GEMINI_API_KEY" in st.secrets:
-        genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-        API_AVAILABLE = True
-except Exception:
-    pass
+# تم تعيين المفتاح الذي أرسلته مباشرة هنا
+OPENROUTER_API_KEY = "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"
+API_AVAILABLE = bool(OPENROUTER_API_KEY)
 
 RAG_SYSTEM_PROMPT = """
 You are a clinical decision support AI acting as an evidence synthesizer.
@@ -58,7 +54,7 @@ if "threshold" not in st.session_state: st.session_state.threshold = 0.45
 # 4. Sidebar Navigation
 # ==========================================
 with st.sidebar:
-    st.markdown("### SoloRAG Support")
+    st.markdown("### 🩺 MediGuide RAG")
     st.markdown("---")
     if st.button("Ask Clinical Question"): st.session_state.page = "Ask Question"
     if st.button("Chronic Awareness Hub"): st.session_state.page = "Awareness"
@@ -66,12 +62,11 @@ with st.sidebar:
     if st.button("Query History"): st.session_state.page = "History"
     if st.button("System Guardrails"): st.session_state.page = "Settings"
     
-    # --- Footer Added Here ---
     st.markdown("---")
     st.markdown("<p style='text-align: center; color: #778da9;'>✨ Created by <strong>Omnia Ragab</strong></p>", unsafe_allow_html=True)
 
 # ==========================================
-# 5. Local Model & DB Initialization (ALL 3 DISEASES)
+# 5. Local Model & DB Initialization
 # ==========================================
 @st.cache_resource
 def load_embedding_model():
@@ -115,7 +110,7 @@ def safe_query(collection, question, top_k=3):
     return {"in_scope": True, "retrieved_chunks": results, "best_distance": best_distance}
 
 # ==========================================
-# ROBUST GENERATION WITH LOCAL FALLBACK
+# ROBUST GENERATION WITH OPENROUTER API & FALLBACK
 # ==========================================
 def generate_robust_response(res_data, query, guideline_name):
     if API_AVAILABLE:
@@ -128,11 +123,26 @@ def generate_robust_response(res_data, query, guideline_name):
                 context_blocks.append(f"Document: {meta['document_name']} | Section: {meta['section_title']} | Page: {pages_fmt}\nText: {text}\n")
             
             full_context = "\n".join(context_blocks)
-            user_prompt = f"CONTEXT:\n{full_context}\n\nUSER QUERY: {query}"
             
-            model = genai.GenerativeModel(model_name='gemini-1.5-flash', system_instruction=RAG_SYSTEM_PROMPT)
-            response = model.generate_content(user_prompt, generation_config=genai.types.GenerationConfig(temperature=0.0))
-            return response.text
+            # إرسال الطلب لـ OpenRouter API
+            headers = {
+                "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                "Content-Type": "application/json"
+            }
+            
+            payload = {
+                "model": "google/gemini-flash-1.5",  # يمكنك تغيير الموديل لأي موديل مجاني آخر متوفر على OpenRouter مثل deepseek/deepseek-chat أو llama
+                "messages": [
+                    {"role": "system", "content": RAG_SYSTEM_PROMPT},
+                    {"role": "user", "content": f"CONTEXT:\n{full_context}\n\nUSER QUERY: {query}"}
+                ],
+                "temperature": 0.0
+            }
+            
+            response = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, json=payload, timeout=30)
+            if response.status_code == 200:
+                result_json = response.json()
+                return result_json["choices"]["message"]["content"]
         except Exception:
             pass 
             
@@ -159,9 +169,9 @@ Based on the {guideline_name}, key guidance retrieved from section '{top_meta['s
 # 6. Page Routing & UI Rendering
 # ==========================================
 if st.session_state.page == "About":
-    st.title("About Chronic Diseases Clinical Support")
+    st.title("About MediGuide RAG")
     st.markdown("---")
-    st.write("This application is an offline-first, zero-latency clinical decision support RAG pipeline built for managing chronic illnesses securely.")
+    st.write("This application is a zero-latency clinical decision support RAG pipeline built for managing chronic illnesses securely, powered by OpenRouter free APIs.")
     st.markdown("### Core Philosophy")
     st.info("Fluent -> Safe. All outputs are strictly grounded in verified public health guidelines with explicit page citations and zero hallucination guardrails.")
 
@@ -190,7 +200,7 @@ elif st.session_state.page == "History":
         st.info(item['answer'])
 
 elif st.session_state.page == "Ask Question":
-    st.title("SoloRAG: Clinical Decision Support")
+    st.title("MediGuide RAG: Clinical Decision Support")
     
     if not collections:
         st.error("No databases loaded. Please check your chroma_db folders.")
